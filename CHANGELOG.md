@@ -1,6 +1,108 @@
 # Change Log
 
 <a name="unreleased"></a>
+## 1.0.0 (2021-03-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename faas to function (#210)
+* remove create cli subcommand (#180)
+* change all references of "repository" to "registry" for images (#156)
+* combine deploy and update commands (#152)
+
+### Features
+
+* 'describe' sub-command for faas cli ([380cc2f](https://www.github.com/lkingland/func/commit/380cc2f3efd5c14b83da9061471135c260a48de5))
+* ability for users to specify custom builders ([#147](https://www.github.com/lkingland/func/issues/147)) ([c2b4a30](https://www.github.com/lkingland/func/commit/c2b4a304bd3fa7d020c71db9f4d79c80c98d86d3))
+* add --all-namespaces flag to `func list` ([#242](https://www.github.com/lkingland/func/issues/242)) ([8e72fd2](https://www.github.com/lkingland/func/commit/8e72fd2eba9f4e6e5d3a0bd366215025ba1d1004))
+* add --build (default: true) flag to func deploy ([8a91cac](https://www.github.com/lkingland/func/commit/8a91cac6cc78b5cf56d5158f3eb03a4076a34ffe))
+* add health probes to node & go services ([#174](https://www.github.com/lkingland/func/issues/174)) ([95c1eb5](https://www.github.com/lkingland/func/commit/95c1eb5e59335cfee84ce536d086bd394268c81c))
+* add init/build/deploy commands and customizable namespace ([#65](https://www.github.com/lkingland/func/issues/65)) ([5b4d97a](https://www.github.com/lkingland/func/commit/5b4d97a44359ebb96fa78d6a63ab3b9744e79094))
+* add local debugging to node.js templates ([#132](https://www.github.com/lkingland/func/issues/132)) ([1b0bb15](https://www.github.com/lkingland/func/commit/1b0bb15147889bb55ff33de1dc132cb0370d1da6))
+* add spring cloud function runtime and templates ([#231](https://www.github.com/lkingland/func/issues/231)) ([557361a](https://www.github.com/lkingland/func/commit/557361a37446953dc613ae30f59913f1924dedd3))
+* basic lifecycle integraiton tests ([8edd0df](https://www.github.com/lkingland/func/commit/8edd0df836055b33473f9a7774e8ae755f46ac2e))
+* Better output of build/deploy/delete commands ([#206](https://www.github.com/lkingland/func/issues/206)) ([ddbb95b](https://www.github.com/lkingland/func/commit/ddbb95b075a383fb1847be2c75fd2c216870c7f8))
+* build and release cross-platform binaries ([15f1e8b](https://www.github.com/lkingland/func/commit/15f1e8be1eaca1fcae8f25df1dc9189774df670a))
+* buildpacks ([5e8dc8b](https://www.github.com/lkingland/func/commit/5e8dc8b5f79591930fd5779bf3449901f11b18e8))
+* change default runtime to Node.js HTTP ([#198](https://www.github.com/lkingland/func/issues/198)) ([61cb56a](https://www.github.com/lkingland/func/commit/61cb56aec3461e9f9b35282435dbc884999be2b3))
+* cli usability enhancements and API simplification ([4918cc7](https://www.github.com/lkingland/func/commit/4918cc7eef09a4bea963d5085de0c565b1ebcbc2))
+* combine deploy and update commands ([#152](https://www.github.com/lkingland/func/issues/152)) ([d5839ea](https://www.github.com/lkingland/func/commit/d5839ea6c1e84e843ad643cc0611a82e2e6d2399))
+* consolidate formatters ([3fc39aa](https://www.github.com/lkingland/func/commit/3fc39aa7738cd0f4c86f13a57a4d9758125968d3))
+* consolidate knative client config construction ([6e0f4ca](https://www.github.com/lkingland/func/commit/6e0f4caa9329acdf06befb800c3201eaa39af356))
+* decouple function name from function domain ([#127](https://www.github.com/lkingland/func/issues/127)) ([0258626](https://www.github.com/lkingland/func/commit/025862689ec8dc460a1ef6f4402151c18a072ba3))
+* default to no confirmation prompts for CLI commands ([566d8f9](https://www.github.com/lkingland/func/commit/566d8f9255d532e88e72d5bce122bebaee88bc81))
+* fish completion ([d822303](https://www.github.com/lkingland/func/commit/d82230353d3d437e8f35e7f9ce3569988d765b42))
+* golangci-lint allow enum shorthand, use config file ([38d41ba](https://www.github.com/lkingland/func/commit/38d41baaa31c98f4ddd90a78adc74ae759515687))
+* http template for Quarkus stack ([17cdf05](https://www.github.com/lkingland/func/commit/17cdf058013970226a1597fb1e025525681992f0))
+* integration tests target ([ddf4ab8](https://www.github.com/lkingland/func/commit/ddf4ab86c46912f78e56a52a14efcf89fd187103))
+* introduce CloudEvent data as first parameter for event functions ([#172](https://www.github.com/lkingland/func/issues/172)) ([7451194](https://www.github.com/lkingland/func/commit/74511948cefc368d898ad05b911fded74d44b759))
+* JSON output for the `list` sub-command ([17a00c9](https://www.github.com/lkingland/func/commit/17a00c9057e2ba4bb9ea698d801ed582cf06efea))
+* list command - improved output ([#205](https://www.github.com/lkingland/func/issues/205)) ([29ca077](https://www.github.com/lkingland/func/commit/29ca07768ca455debb7992ebbf09b2db2058f56d))
+* local cluster allocation, configuration and teardown ([9c499b6](https://www.github.com/lkingland/func/commit/9c499b69c4991b86e51127081cee7fb0fc34d554))
+* remove create cli subcommand ([#180](https://www.github.com/lkingland/func/issues/180)) ([57e1236](https://www.github.com/lkingland/func/commit/57e12362af18f48624a9c303c070846e1645e08d))
+* remove dependency on `kn` binary ([22c60c7](https://www.github.com/lkingland/func/commit/22c60c73799a77234f9c9008591162d1949d54e3))
+* rename faas to function ([#210](https://www.github.com/lkingland/func/issues/210)) ([cd57692](https://www.github.com/lkingland/func/commit/cd57692c9d04fecb918abf4f15cd37d45592cf82))
+* set builder images in templates and .faas.yaml ([#136](https://www.github.com/lkingland/func/issues/136)) ([d6e131f](https://www.github.com/lkingland/func/commit/d6e131f9153c20bd3edbf1441060610987fa5693))
+* test suite ([d33fb2d](https://www.github.com/lkingland/func/commit/d33fb2d694b434799cac1ce718f15d90c205f3cf))
+* the `list` sub-command uses namespace ([fbab8c0](https://www.github.com/lkingland/func/commit/fbab8c09d05e0f08c5320c0d16b9508203e458d1))
+* user can set envvars ([5182487](https://www.github.com/lkingland/func/commit/5182487df218685867fda10c3d1983b4c035c08a))
+* using custom docker daemon (e.g podman) ([6d2d8c6](https://www.github.com/lkingland/func/commit/6d2d8c63b01e12f6cf277c2cd18c3f7298ce86ab))
+* **ci/cd:** add release-please for automated release management ([8a60c5e](https://www.github.com/lkingland/func/commit/8a60c5e0c44d28d2ff085e56299217e05e408df8))
+* **kn:** Enable faas to be integrated as plugin to kn ([#155](https://www.github.com/lkingland/func/issues/155)) ([85a5f47](https://www.github.com/lkingland/func/commit/85a5f475eb32269b9cced05fe36dc90f8befd000))
+* version command respects verbose flag ([#61](https://www.github.com/lkingland/func/issues/61)) ([4c3a276](https://www.github.com/lkingland/func/commit/4c3a276c2f79dfb259946d010cb52f35aad3a4d1))
+* version prints semver first ([dd2e709](https://www.github.com/lkingland/func/commit/dd2e70969f57d8c5c94e6542cdace5a8e173398d))
+
+
+### Bug Fixes
+
+* `delete` and `deploy sub-commands respects func.yaml conf ([d562498](https://www.github.com/lkingland/func/commit/d5624980d5f31f98bc27e803ae94311491d4d078))
+* `func deploy` uses Docker API, not binary ([dc2fbee](https://www.github.com/lkingland/func/commit/dc2fbee67f7f2304bece83a9b4d4f051ed19cd61))
+* `func run` now uses Docker API, not binary ([db0945e](https://www.github.com/lkingland/func/commit/db0945ed3ecb9e6e4283a0cb478d39657c6803dc))
+* build releases from main branch only ([be8c9eb](https://www.github.com/lkingland/func/commit/be8c9eb52aa384f5d0267b652c960c3269cc9966))
+* build using environmentally-defined settings for GOOS and GOARCH by default ([ebd2c11](https://www.github.com/lkingland/func/commit/ebd2c11964b3b7957b2f99f16ba366b87ef7a7fa))
+* buildpack image reference ([9dc0da7](https://www.github.com/lkingland/func/commit/9dc0da73e8b68cd93ac2aa16d6ab4c9e920f9861))
+* change --format flag to --output for list and describe commands ([#248](https://www.github.com/lkingland/func/issues/248)) ([6470d9e](https://www.github.com/lkingland/func/commit/6470d9e57462bc8d3a30583cf146d4f466e2d5f7))
+* compare service names in integraiton tests ([1551d69](https://www.github.com/lkingland/func/commit/1551d69b5d287becaafdf3d5b99a6ba8da926fa6))
+* correct fn signatures in Go Events template ([#246](https://www.github.com/lkingland/func/issues/246)) ([5502492](https://www.github.com/lkingland/func/commit/55024921c26e044f83187cbd5510375d8702c6d9))
+* correct value for config path and robustify ([#130](https://www.github.com/lkingland/func/issues/130)) ([fae27da](https://www.github.com/lkingland/func/commit/fae27dabc97c78cd98be400d296da6fc2fbeba65))
+* correcting broken merge ([#252](https://www.github.com/lkingland/func/issues/252)) ([8d1f5b8](https://www.github.com/lkingland/func/commit/8d1f5b833d86fa959e3386db73f7e1b07bdd6dfd))
+* creating new revision of ksvc ([8f65c81](https://www.github.com/lkingland/func/commit/8f65c8148d1fbe23ef43e79a16ecfbd1697bb266))
+* default k8s namespace to 'faas' per documentation ([2fcbe74](https://www.github.com/lkingland/func/commit/2fcbe740e9c56288f95c86ee3d11eece35a2b967))
+* delete command ([284b77f](https://www.github.com/lkingland/func/commit/284b77f7ef6524195da958850131190399470375))
+* describe works without Eventing ([6c16e65](https://www.github.com/lkingland/func/commit/6c16e65d60543458f0b70c010d672cb4d45f6279))
+* examples in readme ([5591e7f](https://www.github.com/lkingland/func/commit/5591e7fa2ca9584f03bf8d065778cd120ea9054f))
+* Fix plugin version output ([#233](https://www.github.com/lkingland/func/issues/233)) ([8a30ba1](https://www.github.com/lkingland/func/commit/8a30ba193da6097a141332212cbd64e5a1a708e8))
+* fix the help text for the describe function ([#243](https://www.github.com/lkingland/func/issues/243)) ([5a3a0d6](https://www.github.com/lkingland/func/commit/5a3a0d6bdab4d01292c4c8f6011a3b67cadb8ef6))
+* image override ([#88](https://www.github.com/lkingland/func/issues/88)) ([91172ef](https://www.github.com/lkingland/func/commit/91172ef0b156d7c3f3f43cd08ae03c928400644e))
+* image parsing ([6a621a5](https://www.github.com/lkingland/func/commit/6a621a5186ffffec79e6f34c34681cc37eeaa0bd))
+* increase remove timeout to 120s ([80e366b](https://www.github.com/lkingland/func/commit/80e366b14234c184932d91db4188bdabb0742e7a))
+* print "No functions found in [ns] namespace" for kn func list ([#240](https://www.github.com/lkingland/func/issues/240)) ([61ea8d4](https://www.github.com/lkingland/func/commit/61ea8d4fc6e841f0f10151244f10131862bf181c))
+* regenerate pkger files ([#183](https://www.github.com/lkingland/func/issues/183)) ([1d14a8c](https://www.github.com/lkingland/func/commit/1d14a8c10156098d66ef691f84ecce1bd25a6d88))
+* remove dependency on `kn` binary ([d503a73](https://www.github.com/lkingland/func/commit/d503a7368064a893a310de26f707cdc6635ccf91))
+* remove dependency on `kubectl` binary ([8610218](https://www.github.com/lkingland/func/commit/86102181598a5d13961d3f04e579e8a8fc0ebd3b))
+* remove references to unused binaries appsody, kn, kubectl ([ce48083](https://www.github.com/lkingland/func/commit/ce48083a10afca1db00b500cad54c25aa34e732b))
+* return fs errors on config creation ([adcd93d](https://www.github.com/lkingland/func/commit/adcd93d70cf146eb93da635716a85412792a27ac))
+* return JSON in Node.js event template ([#211](https://www.github.com/lkingland/func/issues/211)) ([beb838f](https://www.github.com/lkingland/func/commit/beb838ff43d04c7ccec63a26fbe2af9fb167ae1a))
+* root cmd init ([ec5327d](https://www.github.com/lkingland/func/commit/ec5327d5201b57d6a33bcc7314332686582b676f))
+* serialize trigger on faas.config ([6fdbb64](https://www.github.com/lkingland/func/commit/6fdbb649ba6fc41652c663e9579aea33d8dbb705))
+* set envVars when creating a function ([#250](https://www.github.com/lkingland/func/issues/250)) ([f0be048](https://www.github.com/lkingland/func/commit/f0be048c841be22fcd0d448fdecc0da33b8c77be))
+* signature of HTTP go function in template ([bb575b0](https://www.github.com/lkingland/func/commit/bb575b04c0ee9fa05cf755cf23da21c8cedd18da))
+* sprint-boot template ([38fd673](https://www.github.com/lkingland/func/commit/38fd673fdbef1094558b32910a42fcdff2d8bb0c))
+* stop using manually edited completion ([bf9b048](https://www.github.com/lkingland/func/commit/bf9b04881333fed6038251fa4de92368771840d9))
+* sync package-lock.json ([#137](https://www.github.com/lkingland/func/issues/137)) ([02309a2](https://www.github.com/lkingland/func/commit/02309a24a1d8779fb69e4f67fa4f7faea705b2ba))
+* update pack dependency ([c3c2165](https://www.github.com/lkingland/func/commit/c3c21657b2bc3cba9e4ba87864d8fe0c5d4e43af))
+* update pkger generated files ([8012e19](https://www.github.com/lkingland/func/commit/8012e195c3b25a10d17f37311144a376cc53262c))
+* update quarkus templates ([ffc6a12](https://www.github.com/lkingland/func/commit/ffc6a123e469968865fef1ccb5f8d84a443baccb))
+* update to Knative 0.17 ([#145](https://www.github.com/lkingland/func/issues/145)) ([5fe7052](https://www.github.com/lkingland/func/commit/5fe70526e531e283c6704d9526e3cdd7ef64f9e1))
+* use image name for run command ([#238](https://www.github.com/lkingland/func/issues/238)) ([985906b](https://www.github.com/lkingland/func/commit/985906b0e1f692f94fc84e3e796893192d17bd4c))
+* version flag ([7c25329](https://www.github.com/lkingland/func/commit/7c253298ea231c3920caaa710acee1f3e1e132b1))
+
+
+### src
+
+* change all references of "repository" to "registry" for images ([#156](https://www.github.com/lkingland/func/issues/156)) ([e425c8f](https://www.github.com/lkingland/func/commit/e425c8f08183b333e56d5d3cfe74fc9e85a6c903))
+
 ## [0.11.0](https://www.github.com/boson-project/func/compare/v0.10.0...v0.11.0) (2021-01-21)
 
 
