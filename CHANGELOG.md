@@ -1,6 +1,13 @@
 # Change Log
 
 <a name="unreleased"></a>
+### [0.13.1](https://www.github.com/lkingland/func/compare/v0.13.0...v0.13.1) (2021-04-19)
+
+
+### Bug Fixes
+
+* explicitly tag after release prior to building ([e728545](https://www.github.com/lkingland/func/commit/e728545875df9f0a8997e176392907f2f725ed5a))
+
 ## [0.13.0](https://www.github.com/lkingland/func/compare/v0.12.1...v0.13.0) (2021-04-19)
 
 
