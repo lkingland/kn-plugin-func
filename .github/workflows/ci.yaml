@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - "main"
+      - "temporarily-disabled"
 jobs:
   test:
     runs-on: 'ubuntu-latest'
