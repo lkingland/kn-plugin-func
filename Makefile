@@ -40,7 +40,7 @@ linux: $(LINUX) ## Build for Linux
 
 windows: $(WINDOWS) ## Build for Windows
 
-$(BIN): $(CODE)  ## Build using environment defaults
+$(BIN):  ## Build using environment defaults
 	env CGO_ENABLED=0 go build -ldflags "-X main.date=$(DATE) -X main.vers=$(VERS) -X main.hash=$(HASH)" ./cmd/$(BIN)
 
 $(DARWIN):
