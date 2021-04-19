@@ -1,6 +1,13 @@
 # Change Log
 
 <a name="unreleased"></a>
+### [0.13.2](https://www.github.com/lkingland/func/compare/v0.13.1...v0.13.2) (2021-04-19)
+
+
+### Bug Fixes
+
+* temporarily remove explicit tagging to trigger patch release. ([6de9814](https://www.github.com/lkingland/func/commit/6de981415e420d575ceef29a0b5f7c4134d8352d))
+
 ### [0.13.1](https://www.github.com/lkingland/func/compare/v0.13.0...v0.13.1) (2021-04-19)
 
 
