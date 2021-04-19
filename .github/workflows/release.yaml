@@ -15,3 +15,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           release-type: simple
           bump-minor-pre-major: true
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+      - run:  make func
+      - run:  ./func version
+      - run:  ./func version --verbose
