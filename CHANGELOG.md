@@ -1,6 +1,15 @@
 # Change Log
 
 <a name="unreleased"></a>
+## [0.13.0](https://www.github.com/lkingland/func/compare/v0.12.1...v0.13.0) (2021-04-19)
+
+
+### Features
+
+* build and print version after release aciton ([f00a4c3](https://www.github.com/lkingland/func/commit/f00a4c32301cdeccd9fc5a52ab875ec25ccc4b3e))
+* remove make func target's dependency on code ([8d7df82](https://www.github.com/lkingland/func/commit/8d7df82dc553d8e21247e20f482b2c4a9e2f526e))
+* tweak Makefile to trigger release ([07d49f4](https://www.github.com/lkingland/func/commit/07d49f489b17c9793c44c47cbbea3c89c007a506))
+
 ### [0.12.1](https://www.github.com/boson-project/func/compare/v0.12.0...v0.12.1) (2021-04-14)
 
 
