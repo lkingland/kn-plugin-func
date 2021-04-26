@@ -49,10 +49,46 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           release-type: simple
           bump-minor-pre-major: true
-      # Checkout and test
+      # Checkout
       - uses: actions/checkout@v2
-      - uses: actions/setup-go@v2
+      # Tag
+      # If a release was created, Create three tags:
+      # Major: `vX`     for referencing latest backwards compatible version.
+      # Minor: `vX.Y`   for referencing exact feature set plus latest fixes.
+      # Full:  `vX.Y.Z` synchronously tag the full version which:
+      #   1. Triggers release-please to create draft release, allowing manual
+      #      proofreading (and probably editing) of release notes.
+      #      (often raw commit messages are a bit overwhelming, overly granular
+      #      or at least could use some context when included as release notes).
+      #   2. Ensures the tag exists for subsequent action tasks which rely on
+      #      this metadata, such as including version in release binaries.
+      #      The release-please action does add this tag, but asynchronously.
+      # Note that tags are created annotated such that they show tagging metadata
+      # when queried rather than just the associated commit metadata.
+      - name: tag
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          git config user.name github-actions[bot]
 
+          echo "tag v${{steps.release.outputs.major}}"
+          git tag -d v${{steps.release.outputs.major}} || true
+          git push origin :v${{steps.release.outputs.major}}
+          git tag -a v${{steps.release.outputs.major}} -m "Release v${{steps.release.outputs.major}}"
+          git push origin v${{steps.release.outputs.major}}
+
+          echo "tag v${{steps.release.outputs.major}}.${{steps.release.outputs.major}}"
+          git tag -d v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} || true
+          git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}
+          git tag -a v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} -m "Release v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}"
+          git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} || true
+
+          echo "tag v${{steps.release.outputs.major}}.${{steps.release.outputs.major}}.${{steps.release.outputs.patch}}"
+          git tag -d v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}.${{steps.release.outputs.patch}} || true
+          git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}.${{steps.release.outputs.patch}} || true
+          git tag -a v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}.${{steps.release.outputs.patch}} -m "Release v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}.${{steps.release.outputs.patch}}"
+          git push origin v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}.${{steps.release.outputs.patch}} || true
+
+      - uses: actions/setup-go@v2
       - name: Install pkger
         run: |
           curl -s -L -o pkger.tgz ${{ needs.test.outputs.pkger }}
@@ -63,6 +99,9 @@ jobs:
         run:  make cross-platform
         env:
           PKGER: "./pkger"
+          # release-please adds the version asynchronously. Without either this
+          # explicit input from the action's output, or the synchronous tagging 
+          # above, the version will not be built into resultant binaries.
           VERS: ${{ steps.release.outputs.tag_name }}
 
       # Upload all build artifacts whether it's a release or not
