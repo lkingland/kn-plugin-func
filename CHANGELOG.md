@@ -1,6 +1,19 @@
 # Change Log
 
 <a name="unreleased"></a>
+## [0.13.0](https://www.github.com/lkingland/func/compare/v0.12.1...v0.13.0) (2021-04-26)
+
+
+### Features
+
+* expanded tagging for releases ([3e1e3fb](https://www.github.com/lkingland/func/commit/3e1e3fb3d91aac53540a1e0e4217721656befc77))
+* usage of local evnvvar in func cfg file ([7f8e595](https://www.github.com/lkingland/func/commit/7f8e5954a939563486661a98198b22f41eebc195))
+
+
+### Bug Fixes
+
+* default for `--builder` flag ([06455f4](https://www.github.com/lkingland/func/commit/06455f4bac02e8581ae4471e72909ba9fe7dbd4d))
+
 ### [0.12.1](https://www.github.com/boson-project/func/compare/v0.12.0...v0.12.1) (2021-04-14)
 
 
