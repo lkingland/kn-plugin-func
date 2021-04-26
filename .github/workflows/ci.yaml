@@ -72,13 +72,13 @@ jobs:
 
           echo "tag v${{steps.release.outputs.major}}"
           git tag -d v${{steps.release.outputs.major}} || true
-          git push origin :v${{steps.release.outputs.major}}
+          git push origin :v${{steps.release.outputs.major}} || true
           git tag -a v${{steps.release.outputs.major}} -m "Release v${{steps.release.outputs.major}}"
-          git push origin v${{steps.release.outputs.major}}
+          git push origin v${{steps.release.outputs.major}} || true
 
           echo "tag v${{steps.release.outputs.major}}.${{steps.release.outputs.major}}"
           git tag -d v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} || true
-          git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}
+          git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} || true
           git tag -a v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} -m "Release v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}}"
           git push origin :v${{steps.release.outputs.major}}.${{steps.release.outputs.minor}} || true
 
