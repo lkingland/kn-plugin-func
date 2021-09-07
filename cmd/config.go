@@ -23,7 +23,7 @@ type functionLoaderSaver interface {
 	functionSaver
 }
 
-type standardLoaderSaver struct {}
+type standardLoaderSaver struct{}
 
 func (s standardLoaderSaver) Load(path string) (fn.Function, error) {
 	f, err := fn.NewFunction(path)
