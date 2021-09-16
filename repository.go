@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/markbates/pkger"
 )
 
 // Path to builtin repositories.
@@ -61,52 +60,6 @@ func NewRepositoryFromPath(path string) (Repository, error) {
 				Runtime:    runtime.Name(),
 				Repository: r.Name,
 				Name:       template.Name()})
-		}
-	}
-	return r, nil
-}
-
-// NewRepository from builtin (encoded ./templates)
-func NewRepositoryFromBuiltin() (Repository, error) {
-	r := Repository{
-		Name:      DefaultRepository,
-		Templates: []Template{},
-		Runtimes:  []string{}}
-
-	// Read in runtimes
-	dir, err := pkger.Open(builtinRepositories)
-	if err != nil {
-		return r, err
-	}
-	runtimes, err := dir.Readdir(-1)
-	if err != nil {
-		return r, err
-	}
-	for _, runtime := range runtimes {
-		if !runtime.IsDir() || strings.HasPrefix(runtime.Name(), ".") {
-			continue // ignore from runtimes non-directory or hidden items
-		}
-		r.Runtimes = append(r.Runtimes, runtime.Name())
-
-		// Each subdirectory is a Template
-		templateDir, err := pkger.Open(filepath.Join(builtinRepositories, runtime.Name()))
-		if err != nil {
-			return r, err
-		}
-		templates, err := templateDir.Readdir(-1)
-		if err != nil {
-			return r, err
-		}
-		for _, template := range templates {
-			if !template.IsDir() || strings.HasPrefix(template.Name(), ".") {
-				continue // ignore from templates non-directory or hidden items
-			}
-			r.Templates = append(r.Templates, Template{
-				Runtime:    runtime.Name(),
-				Repository: r.Name,
-				Name:       template.Name(),
-			})
-
 		}
 	}
 	return r, nil

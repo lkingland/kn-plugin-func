@@ -87,7 +87,6 @@ github.com/go-git/gcfg/scanner
 github.com/go-git/gcfg/token
 github.com/go-git/gcfg/types
 # github.com/go-git/go-billy/v5 v5.3.1
-## explicit
 github.com/go-git/go-billy/v5
 github.com/go-git/go-billy/v5/helper/chroot
 github.com/go-git/go-billy/v5/helper/polyfill
@@ -240,8 +239,6 @@ github.com/markbates/pkger
 github.com/markbates/pkger/here
 github.com/markbates/pkger/internal/maps
 github.com/markbates/pkger/pkging
-github.com/markbates/pkger/pkging/embed
-github.com/markbates/pkger/pkging/mem
 github.com/markbates/pkger/pkging/stdos
 # github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 github.com/matttproud/golang_protobuf_extensions/pbutil

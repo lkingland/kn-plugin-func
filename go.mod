@@ -4,7 +4,6 @@ go 1.16
 
 require (
 	github.com/alecthomas/jsonschema v0.0.0-20180308105923-f2c93856175a
-	github.com/go-git/go-billy/v5 v5.3.1
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/markbates/pkger v0.17.1
 	github.com/mitchellh/go-homedir v1.1.0

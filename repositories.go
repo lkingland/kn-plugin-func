@@ -36,13 +36,6 @@ func (r *Repositories) All() (repos []Repository, err error) {
 	// Single repo override
 	// TODO: Create single remote repository override for WithRepository option.
 
-	// Default (builtin) repo always first
-	builtin, err := NewRepositoryFromBuiltin()
-	if err != nil {
-		return
-	}
-	repos = append(repos, builtin)
-
 	// Return if not using on-disk repos
 	// If r.Path not populated, this indicates the client should
 	// not read repositories from disk, using only builtin.
@@ -75,9 +68,6 @@ func (r *Repositories) All() (repos []Repository, err error) {
 
 // Get a repository by name, error if it does not exist.
 func (r *Repositories) Get(name string) (repo Repository, err error) {
-	if name == DefaultRepository {
-		return NewRepositoryFromBuiltin()
-	}
 	// TODO: when WithRepository defined, only it can be defined
 	return NewRepositoryFromPath(filepath.Join(r.Path, name))
 }
