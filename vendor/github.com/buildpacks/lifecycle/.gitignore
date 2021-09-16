@@ -1,9 +1,0 @@
-.DS_Store
-.idea
-*.coverprofile
-*.test
-*~
-/out
-
-acceptance/testdata/*/**/container/cnb/lifecycle/*
-acceptance/testdata/*/**/container/docker-config/config.json

@@ -12,8 +12,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 	"github.com/ory/viper"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"knative.dev/client/pkg/util"
 
 	fn "knative.dev/kn-plugin-func"
 )
@@ -101,8 +99,6 @@ func init() {
 // according to the context defined by:  the optional config file,
 // Environment Variables, command arguments and flags.
 func Execute(ctx context.Context) {
-	// Sets version to a string partially populated by compile-time flags.
-	root.Version = version.String()
 	// Execute the root of the command tree.
 	if err := root.ExecuteContext(ctx); err != nil {
 		if ctx.Err() != nil {
@@ -298,54 +294,4 @@ func deriveImage(explicitImage, defaultRegistry, path string) string {
 	}
 	derivedValue, _ := fn.DerivedImage(path, defaultRegistry)
 	return derivedValue // Use the func system's derivation logic.
-}
-
-func envFromCmd(cmd *cobra.Command) (*util.OrderedMap, []string, error) {
-	if cmd.Flags().Changed("env") {
-		env, err := cmd.Flags().GetStringArray("env")
-		if err != nil {
-			return nil, []string{}, fmt.Errorf("Invalid --env: %w", err)
-		}
-		return util.OrderedMapAndRemovalListFromArray(env, "=")
-	}
-	return util.NewOrderedMap(), []string{}, nil
-}
-
-func mergeEnvs(envs fn.Envs, envToUpdate *util.OrderedMap, envToRemove []string) (fn.Envs, error) {
-	updated := sets.NewString()
-
-	for i := range envs {
-		if envs[i].Name != nil {
-			value, present := envToUpdate.GetString(*envs[i].Name)
-			if present {
-				envs[i].Value = &value
-				updated.Insert(*envs[i].Name)
-			}
-		}
-	}
-
-	it := envToUpdate.Iterator()
-	for name, value, ok := it.NextString(); ok; name, value, ok = it.NextString() {
-		if !updated.Has(name) {
-			n := name
-			v := value
-			envs = append(envs, fn.Env{Name: &n, Value: &v})
-		}
-	}
-
-	for _, name := range envToRemove {
-		for i, envVar := range envs {
-			if *envVar.Name == name {
-				envs = append(envs[:i], envs[i+1:]...)
-				break
-			}
-		}
-	}
-
-	errMsg := fn.ValidateEnvs(envs)
-	if len(errMsg) > 0 {
-		return fn.Envs{}, fmt.Errorf(strings.Join(errMsg, "\n"))
-	}
-
-	return envs, nil
 }

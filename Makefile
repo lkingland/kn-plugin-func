@@ -27,7 +27,7 @@ LDFLAGS := "-X main.date=$(DATE) -X main.vers=$(VERS) -X main.hash=$(HASH)"
 PKGER ?= pkger
 
 # All Code prerequisites, including generated files, etc.
-CODE := $(shell find . -name '*.go') pkged.go go.mod schema/func_yaml-schema.json
+CODE := $(shell find . -name '*.go') pkged.go go.mod
 TEMPLATES := $(shell find templates -name '*' -type f)
 
 # Default Targets
@@ -79,9 +79,8 @@ pkged.go: $(TEMPLATES)
 	# to insstall pkger: 'go get github.com/markbates/pkger/cmd/pkger'
 	$(PKGER)
 
-clean: ## Remove generated artifacts such as binaries and schemas
+clean: ## Remove generated artifacts such as binaries
 	rm -f $(BIN) $(BIN_WINDOWS) $(BIN_LINUX) $(BIN_DARWIN)
-	rm -f schema/func_yaml-schema.json
 	rm -f coverage.out
 
 
@@ -148,18 +147,4 @@ windows: $(BIN_WINDOWS) ## Build for Windows
 
 $(BIN_WINDOWS): pkged.go
 	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o $(BIN_WINDOWS) -ldflags $(LDFLAGS) ./cmd/$(BIN)
-
-######################
-##@ Schemas
-######################
-schema-generate: schema/func_yaml-schema.json ## Generate func.yaml schema
-schema/func_yaml-schema.json: config.go
-	go run schema/generator/main.go
-
-schema-check: ## Check that func.yaml schema is up-to-date
-	mv schema/func_yaml-schema.json schema/func_yaml-schema-previous.json
-	make schema-generate
-	diff schema/func_yaml-schema.json schema/func_yaml-schema-previous.json ||\
-	(echo "\n\nFunction config schema 'schema/func_yaml-schema.json' is obsolete, please run 'make schema-generate'.\n\n"; rm -rf schema/func_yaml-schema-previous.json; exit 1)
-	rm -rf schema/func_yaml-schema-previous.json
 

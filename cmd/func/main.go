@@ -28,6 +28,5 @@ func main() {
 		os.Exit(137)
 	}()
 
-	cmd.SetMeta(date, vers, hash)
 	cmd.Execute(ctx)
 }

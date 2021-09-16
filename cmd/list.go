@@ -65,10 +65,6 @@ kn func list --all-namespaces --output json
 	cmd.Flags().StringP("namespace", "n", "", "Namespace to search for functions. By default, the functions of the actual active namespace are listed. (Env: $FUNC_NAMESPACE)")
 	cmd.Flags().StringP("output", "o", "human", "Output format (human|plain|json|xml|yaml) (Env: $FUNC_OUTPUT)")
 
-	if err := cmd.RegisterFlagCompletionFunc("output", CompleteOutputFormatList); err != nil {
-		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
-	}
-
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		return runList(cmd, args, clientFn)
 	}
