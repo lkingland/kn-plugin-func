@@ -13,15 +13,21 @@ import (
 	"sigs.k8s.io/kustomize/api/internal/generators"
 	"sigs.k8s.io/kustomize/api/internal/kusterr"
 	"sigs.k8s.io/kustomize/api/konfig"
-	"sigs.k8s.io/kustomize/api/resid"
 	"sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/kustomize/kyaml/kio"
+	"sigs.k8s.io/kustomize/kyaml/resid"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
 // Factory makes instances of Resource.
 type Factory struct {
 	hasher ifc.KustHasher
+
+	// When set to true, IncludeLocalConfigs indicates
+	// that Factory should include resources with the
+	// annotation 'config.kubernetes.io/local-config'.
+	// By default these resources are ignored.
+	IncludeLocalConfigs bool
 }
 
 // NewFactory makes an instance of Factory.
@@ -58,18 +64,23 @@ func (rf *Factory) FromMapAndOption(
 		// TODO: return err instead of log.
 		log.Fatal(err)
 	}
-	return rf.makeOne(n, types.NewGenArgs(args))
+	return rf.makeOne(n, args)
 }
 
 // makeOne returns a new instance of Resource.
-func (rf *Factory) makeOne(rn *yaml.RNode, o *types.GenArgs) *Resource {
+func (rf *Factory) makeOne(rn *yaml.RNode, o *types.GeneratorArgs) *Resource {
 	if rn == nil {
 		log.Fatal("RNode must not be null")
 	}
-	if o == nil {
-		o = types.NewGenArgs(nil)
+	resource := &Resource{RNode: *rn}
+	if o != nil {
+		if o.Options == nil || !o.Options.DisableNameSuffixHash {
+			resource.EnableHashSuffix()
+		}
+		resource.SetBehavior(types.NewGenerationBehavior(o.Behavior))
 	}
-	return &Resource{node: rn, options: o}
+
+	return resource
 }
 
 // SliceFromPatches returns a slice of resources given a patch path
@@ -221,13 +232,15 @@ func (rf *Factory) shouldIgnore(n *yaml.RNode) (bool, error) {
 	if n.IsNilOrEmpty() {
 		return true, nil
 	}
-	md, err := n.GetValidatedMetadata()
-	if err != nil {
-		return true, err
-	}
-	_, ignore := md.ObjectMeta.Annotations[konfig.IgnoredByKustomizeAnnotation]
-	if ignore {
-		return true, nil
+	if !rf.IncludeLocalConfigs {
+		md, err := n.GetValidatedMetadata()
+		if err != nil {
+			return true, err
+		}
+		_, ignore := md.ObjectMeta.Annotations[konfig.IgnoredByKustomizeAnnotation]
+		if ignore {
+			return true, nil
+		}
 	}
 	if foundNil, path := n.HasNilEntryInList(); foundNil {
 		return true, fmt.Errorf("empty item at %v in object %v", path, n)
@@ -257,7 +270,7 @@ func (rf *Factory) MakeConfigMap(kvLdr ifc.KvLoader, args *types.ConfigMapArgs) 
 	if err != nil {
 		return nil, err
 	}
-	return rf.makeOne(rn, types.NewGenArgs(&args.GeneratorArgs)), nil
+	return rf.makeOne(rn, &args.GeneratorArgs), nil
 }
 
 // MakeSecret makes an instance of Resource for Secret
@@ -266,5 +279,5 @@ func (rf *Factory) MakeSecret(kvLdr ifc.KvLoader, args *types.SecretArgs) (*Reso
 	if err != nil {
 		return nil, err
 	}
-	return rf.makeOne(rn, types.NewGenArgs(&args.GeneratorArgs)), nil
+	return rf.makeOne(rn, &args.GeneratorArgs), nil
 }

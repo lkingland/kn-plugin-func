@@ -31,4 +31,5 @@ require (
 	knative.dev/eventing v0.25.1-0.20210909163359-316e14d7fbc2
 	knative.dev/pkg v0.0.0-20210909165259-d4505c660535
 	knative.dev/serving v0.25.1-0.20210913112533-33aeffc6c9e2
+	sigs.k8s.io/kustomize/api v0.9.0 // indirect
 )
