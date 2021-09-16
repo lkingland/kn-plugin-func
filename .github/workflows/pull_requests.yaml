@@ -64,11 +64,11 @@ jobs:
       - name: Clear Cache
         run: go clean -modcache -testcache -cache
       - name: Unit Test
-        run: make test
+        run: go test ./...
         env:
           PKGER: "./${{ steps.pkger-binaries.outputs.binary }}"
       - name: Build
-        run: make build
+        run: go build -v ./cmd/func
         env:
           PKGER: "./${{ steps.pkger-binaries.outputs.binary }}"
 
