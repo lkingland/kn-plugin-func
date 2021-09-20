@@ -65,11 +65,11 @@ func TestCreateRepositoriesPath(t *testing.T) {
 	// after flags, environment variables, etc. are calculated.  In this case it
 	// will validate the test condition:  that config reflects the value of
 	// XDG_CONFIG_HOME, and secondarily the path suffix `func/repositories`.
-	cmd := NewCreateCmd(func(cfg createConfig) *fn.Client {
+	cmd := NewCreateCmd(func(cfg createConfig) (*fn.Client, error) {
 		if cfg.Repositories != expected {
 			t.Fatalf("expected repositories default path to be '%v', got '%v'", expected, cfg.Repositories)
 		}
-		return fn.New()
+		return fn.New(), nil
 	})
 
 	// Invoke the command, which is an airball, but does invoke the client
