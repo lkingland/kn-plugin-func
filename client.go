@@ -22,7 +22,7 @@ const (
 
 	// DefaultRuntime is the language runtime for a new Function, including
 	// the template written and builder invoked on deploy.
-	DefaultLanguage = "node"
+	DefaultRuntime = "node"
 
 	// DefautlTemplate is the default Function signature / environmental context
 	// of the resultant function.  All runtimes are expected to have at least
@@ -427,7 +427,7 @@ func (c *Client) Create(cfg Function) (err error) {
 	// Assert runtime was provided, or default.
 	f.Runtime = cfg.Runtime
 	if f.Runtime == "" {
-		f.Runtime = DefaultLanguage
+		f.Runtime = DefaultRuntime
 	}
 
 	// Assert template was provided, or default.
