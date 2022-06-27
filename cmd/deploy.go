@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"golang.org/x/term"
@@ -27,30 +28,79 @@ import (
 func NewDeployCmd(newClient ClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy",
-		Short: "Deploy a function",
-		Long: `Deploy a function
+		Short: "Deploy a Function",
+		Long: `
+NAME
+	{{.Name}} deploy - Deploy a Function
 
-Builds a container image for the function and deploys it to the connected Knative enabled cluster. 
-The function is picked up from the project in the current directory or from the path provided
-with --path.
-If not already configured, either --registry or --image has to be provided and is then stored 
-in the configuration file.
+SYNOPSIS
+	{{.Name}} deploy [-R|--remote] [-r|--registry] [-i|--image]
+	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
+	             [-b|--build] [--builder] [--builder-image] [-p|--push]
+	             [-c|--confirm] [-v|--verbose]
 
-If the function is already deployed, it is updated with a new container image
-that is pushed to an image registry, and finally the function's Knative service is updated.
-`,
-		Example: `
-# Build and deploy the function from the current directory's project. The image will be
-# pushed to "quay.io/myuser/<function name>" and deployed as Knative service with the 
-# same name as the function to the currently connected cluster.
-{{.Name}} deploy --registry quay.io/myuser
+DESCRIPTION
+	
+	Deploys a Function to the currently configured Knative-enabled cluster.
 
-# Same as above but using a full image name, that will create a Knative service "myfunc" in 
-# the namespace "myns"
-{{.Name}} deploy --image quay.io/myuser/myfunc -n myns
+	By default the Function in the current working directory is deployed, or at
+	the path defined by --path.
+
+	A Function which was previously deployed will be updated when re-deployed.
+
+	The Function is built into a container for transport to the destination
+	cluster by way of a registry.  Therefore --registry must be provided or have
+	previously been configured for the Function. This registry is also used to
+	determine the final built image tag for the Function.  This final image name
+	can be provided explicitly using --image, in which case it is used in place
+	of --registry.
+	
+	To run deploy using an interactive mode, use the --confirm (-c) option.
+	This mode is useful for the first deployment in particular, since subsdequent
+	deployments remember most of the settings provided.
+
+	Building
+	  By default the Function will be built if it has not yet been built, or if
+	  changes are detected in the Function's source.  The --build flag can be
+	  used to override this behavior and force building either on or off.
+
+	Remote
+	  Building and deploying is by default executed on the current host.  This
+	  process can also be triggered to run remotely in a Tekton-enabled cluster.
+	  The --remote flag indicates that a build and deploy pipeline should be
+	  invoked in the remote.  Functions deployed in this manner must have their
+	  source code kept in a git repository, and the URL to this source provided
+	  via --git-url.  A specific branch can be specified with --git-branch.
+
+EXAMPLES
+
+	o Deploy the Function using an interactive prompt to configure settings.
+	  This is useful for the first deployment, since subsequent deplouments
+		remember most chosen settings.
+	  $ {{.Name}} deploy -c
+
+	o Deploy the Function in the current working directory.
+	  The Function image will be pushed to "quay.io/alice/<Function Name>"
+	  $ {{.Name}} deploy --registry quay.io/alice
+
+	o Deploy the Function in the current working directory, manually specifying
+	  the final image name and target cluster namespace.
+	  $ {{.Name}} deploy --image quay.io/alice/myfunc --namespace myns
+
+	o Deploy the Function, rebuilding the image even if no changes have been
+	  detected in the local filesystem (source).
+	  $ {{.Name}} deploy --build
+
+	o Deploy without rebuilding, even if changes have been detected in the
+	  local filesystem.
+	  $ {{.Name}} deploy --build=false
+
+	o Trigger a remote deploy, which instructs the cluster to build build and
+	  deploy the Function in the specified git repository.
+	  $ {{.Name}} deploy --remote --git-url=https://example.com/alice/myfunc.git
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
-		PreRunE:    bindEnv("image", "path", "registry", "confirm", "build", "push", "git-url", "git-branch", "git-dir", "builder", "builder-image", "platform"),
+		PreRunE:    bindEnv("confirm", "env", "git-url", "git-branch", "git-dir", "remote", "build", "builder", "builder-image", "image", "registry", "push", "platform", "path"),
 	}
 
 	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all configuration options (Env: $FUNC_CONFIRM)")
@@ -59,22 +109,25 @@ that is pushed to an image registry, and finally the function's Knative service 
 		"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
 	cmd.Flags().StringP("git-url", "g", "", "Repo url to push the code to be built (Env: $FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", "", "Git branch to be used for remote builds (Env: $FUNC_GIT_BRANCH)")
-	cmd.Flags().StringP("git-dir", "d", "", "Directory in the repo where the function is located (Env: $FUNC_GIT_DIR)")
-	cmd.Flags().StringP("build", "b", fn.DefaultBuildType, fmt.Sprintf("Build specifies the way the function should be built. Supported types are %s (Env: $FUNC_BUILD)", fn.SupportedBuildTypes(true)))
+	cmd.Flags().StringP("git-dir", "d", "", "Directory in the repo where the Function is located (Env: $FUNC_GIT_DIR)")
+
+	// Remote indicates whether the deployment process (including potentially
+	// building as well) is being performed locally (default) or by triggering
+	// a process rremotely.
+	cmd.Flags().BoolP("remote", "", false, "Trigger a remote deployment.  Default is to deploy and build from the local system: $FUNC_REMOTE)")
+
 	// Flags shared with Build specifically related to building:
-	cmd.Flags().StringP("builder", "", fn.DefaultBuilder, fmt.Sprintf("build strategy to use when creating the underlying image. Currently supported build strategies are %s.", fn.SupportedBuilders()))
+	cmd.Flags().StringP("build", "b", "auto", "Build the Function. [auto|true|false]. [Env: $FUNC_BUILD]")
+	cmd.Flags().Lookup("build").NoOptDefVal = "true" // --build is equivalient to --build=true
+	cmd.Flags().StringP("builder", "", "pack", "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' and 's2i'. [Env: $FUNC_BUILDER]")
 	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)")
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")
-	cmd.Flags().BoolP("push", "u", true, "Attempt to push the function image to registry before deploying (Env: $FUNC_PUSH)")
+	cmd.Flags().BoolP("push", "u", true, "Push the Function image to registry before deploying (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
 	setPathFlag(cmd)
 
-	if err := cmd.RegisterFlagCompletionFunc("build", CompleteDeployBuildType); err != nil {
-		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
-	}
-
-	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildersList); err != nil {
+	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildStrategyList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
 
@@ -91,12 +144,17 @@ that is pushed to an image registry, and finally the function's Knative service 
 	return cmd
 }
 
+// runDeploy gathers configuraiton from environment, flags and the user,
+// merges these into the Function requested, and triggers either a remote or
+// local build-and-deploy.
 func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err error) {
+	// Create a deploy config from environment variables and flags
 	config, err := newDeployConfig(cmd)
 	if err != nil {
 		return
 	}
 
+	// Prompt the user to potentially change config interactively.
 	config, err = config.Prompt()
 	if err != nil {
 		if err == terminal.InterruptErr {
@@ -116,18 +174,29 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		imageDigestProvided = true
 	}
 
-	function, err := functionWithOverrides(config.Path, functionOverrides{Namespace: config.Namespace, Image: config.Image})
+	// Load the Function, and if it exists (path initialized as a Function), merge
+	// in any updates from flags/env vars (namespace, explicit image name, envs).
+	f, err := fn.NewFunction(config.Path)
 	if err != nil {
 		return
 	}
-
-	// save image digest if provided in --image
-	if imageDigestProvided {
-		function.ImageDigest = imageSplit[1]
+	if !f.Initialized() {
+		return fmt.Errorf("the given path '%v' does not contain an initialized function.", config.Path)
 	}
-
+	if config.Image != "" {
+		f.Image = config.Image
+	}
+	f.Envs, _, err = mergeEnvs(f.Envs, config.EnvToUpdate, config.EnvToRemove)
+	if err != nil {
+		return
+	}
+	if imageDigestProvided {
+		// TODO(lkingland):  This could instead be part of the config, relying on
+		// zero values rather than a flag indicating "Image Digest was Provided"
+		f.ImageDigest = imageSplit[1] // save image digest if provided in --image
+	}
 	// add ns to func.yaml on first deploy and warn if current context differs from func.yaml
-	function.Namespace, err = checkNamespaceDeploy(function.Namespace, config.Namespace)
+	f.Namespace, err = checkNamespaceDeploy(f.Namespace, config.Namespace)
 	if err != nil {
 		return
 	}
@@ -154,119 +223,142 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		return fmt.Errorf("the given path '%v' does not contain an initialized function. Please create one at this path before deploying", config.Path)
 	}
 
-	// If the function does not yet have an image name and one was not provided on the command line
-	if function.Image == "" && currentBuildType != "disabled" {
-		//  AND a --registry was not provided, then we need to
-		// prompt for a registry from which we can derive an image name.
-		if config.Registry == "" {
-			fmt.Println("A registry for function images is required. For example, 'docker.io/tigerteam'.")
+	// FIXME(lkingland):  This case may not be needed; or may need to be moved
+	// into config.Prompt()
+	//
+	// If building was enabled, it will have been built by now and will have an
+	// image name.   If building was disabled, then there is no need to ask for
+	// a registry. Furthermore, this will prompt even if confirmation is disabled.
+	//
+	// Instead, it seems correct that this prompting will happen in config.Prompt
+	// iff building is enabled.
+	/*
+		if function.Image == "" {
+			//  AND a --registry was not provided, then we need to
+			// prompt for a registry from which we can derive an image name.
+			if config.Registry == "" {
+				fmt.Println("A registry for Function images is required. For example, 'docker.io/tigerteam'.")
 
-			err = survey.AskOne(
-				&survey.Input{Message: "Registry for function images:"},
-				&config.Registry, survey.WithValidator(survey.Required))
-			if err != nil {
-				if err == terminal.InterruptErr {
-					return nil
+				err = survey.AskOne(
+					&survey.Input{Message: "Registry for Function images:"},
+					&config.Registry, survey.WithValidator(survey.Required))
+				if err != nil {
+					if err == terminal.InterruptErr {
+						return nil
+					}
+					return
 				}
-				return
 			}
+
+			// We have the registry, so let's use it to derive the Function image name
+			config.Image = deriveImage(config.Image, config.Registry, config.Path)
+			function.Image = config.Image
 		}
+	*/
 
-		// We have the registry, so let's use it to derive the function image name
-		config.Image = deriveImage(config.Image, config.Registry, config.Path)
-		function.Image = config.Image
-	}
-
-	// Choose a builder based on the value of the --builder flag
+	// Choose a builder based on the value of the --builder flag and a possible
+	// override for the build image for that builder to use from the optional
+	// builder-image flag.
 	var builder fn.Builder
-	if function.Builder == "" || cmd.Flags().Changed("builder") {
-		function.Builder = config.Builder
-	} else {
-		config.Builder = function.Builder
-	}
-	if err = fn.ValidateBuilder(config.Builder); err != nil {
-		return err
-	}
-	if config.Builder == fn.BuilderPack {
+	if config.Builder == "pack" {
 		if config.Platform != "" {
-			err = fmt.Errorf("the --platform flag works only with s2i build")
-			return
+			fmt.Fprintln(os.Stderr, "the --platform flag works only with s2i build")
 		}
 		builder = buildpacks.NewBuilder(buildpacks.WithVerbose(config.Verbose))
-	} else if config.Builder == fn.BuilderS2i {
+	} else if config.Builder == "s2i" {
 		builder = s2i.NewBuilder(s2i.WithVerbose(config.Verbose), s2i.WithPlatform(config.Platform))
-	}
-
-	// All set, let's write changes in the config to the disk
-	err = function.Write()
-	if err != nil {
+	} else {
+		err = errors.New("unrecognized builder: valid values are: s2i, pack")
 		return
 	}
-
-	// Default config namespace is the function's namespace
-	if config.Namespace == "" {
-		config.Namespace = function.Namespace
-	}
-
-	// if registry was not changed via command line flag meaning it's empty
-	// keep the same registry by setting the config.registry to empty otherwise
-	// trust viper to override the env variable with the given flag if both are specified
-	if regFlag, _ := cmd.Flags().GetString("registry"); regFlag == "" {
-		config.Registry = ""
-	}
-
-	// Use the user-provided builder image, if supplied
 	if config.BuilderImage != "" {
-		function.BuilderImages[config.Builder] = config.BuilderImage
+		f.BuilderImages[config.Builder] = config.BuilderImage
 	}
-
-	client, done := newClient(ClientConfig{Namespace: config.Namespace, Verbose: config.Verbose},
+	client, done := newClient(ClientConfig{Namespace: f.Namespace, Verbose: config.Verbose},
 		fn.WithRegistry(config.Registry),
 		fn.WithBuilder(builder))
 	defer done()
 
-	switch currentBuildType {
-	case fn.BuildTypeLocal, "":
-		if config.GitURL != "" || config.GitDir != "" || config.GitBranch != "" {
-			return fmt.Errorf("remote git arguments require the --build=git flag")
-		}
-		if err := client.Build(cmd.Context(), config.Path); err != nil {
-			return err
-		}
-	case fn.BuildTypeGit:
-		git := function.Git
+	// Perform the deployment either remtoe or local.
+	if config.Remote {
+		// Remote
+		// ------
+		// If a remote deploy was requested, trigger the remote to deploy (and build
+		// by default) using the configured git repository URL
 
+		// Populate f.Git from config
+		// TODO: extract
 		if config.GitURL != "" {
-			git.URL = &config.GitURL
 			if strings.Contains(config.GitURL, "#") {
 				parts := strings.Split(config.GitURL, "#")
-				git.URL = &parts[0]
-				git.Revision = &parts[1]
+				if len(parts) == 2 {
+					f.Git.URL = parts[0]
+					f.Git.Revision = parts[1]
+				} else {
+					return fmt.Errorf("invalid --git-url '%v'", config.GitURL)
+				}
+			} else {
+				f.Git.URL = config.GitURL
 			}
 		}
-
 		if config.GitBranch != "" {
-			git.Revision = &config.GitBranch
+			f.Git.Revision = config.GitBranch
 		}
-
 		if config.GitDir != "" {
-			git.ContextDir = &config.GitDir
+			f.Git.ContextDir = config.GitDir
 		}
 
-		return client.RunPipeline(cmd.Context(), config.Path, git)
-	case fn.BuildTypeDisabled:
-		// nothing needed to be done for `build=disabled`
-	default:
-		return ErrInvalidBuildType(fmt.Errorf("unknown build type: %s", currentBuildType))
-	}
-
-	if config.Push {
-		if err := client.Push(cmd.Context(), config.Path); err != nil {
+		// Invoke a remote build/push/deploy pipeline
+		if err = client.RunPipeline(cmd.Context(), f); err != nil {
 			return err
 		}
+
+	} else {
+		// Local
+		// -----
+		// build unbuilt, filesystem changed since last build or --build forced
+		// after validating no --git-x flags.
+		if config.GitURL != "" || config.GitDir != "" || config.GitBranch != "" {
+			return fmt.Errorf("Git settings (--git-url --git-dir and --git-branch) are currently only available when triggering remote deployments using --remote.")
+		}
+		if config.Build == "auto" {
+			if !client.Built(f.Root) {
+				if err = client.Build(cmd.Context(), config.Path); err != nil {
+					return
+				}
+			}
+			fmt.Println("Function already built.  Use --build to force a rebuild.")
+		} else {
+			var build bool
+			if build, err = strconv.ParseBool(config.Build); err != nil {
+				return fmt.Errorf("unrecognized value for --build '%v'.  accepts 'auto', 'git', 'true' or 'false' (or similarly truthy value)", build)
+			}
+			if build {
+				if err = client.Build(cmd.Context(), config.Path); err != nil {
+					return
+				}
+			} else {
+				fmt.Println("Function build disabled.")
+			}
+		}
+		// Push built image for the Function at path to registry
+		if config.Push {
+			if err = client.Push(cmd.Context(), config.Path); err != nil {
+				return
+			}
+		}
+		// Deploy pushed image for Function at path to current platform
+		if err = client.Deploy(cmd.Context(), config.Path); err != nil {
+			return
+		}
 	}
 
-	return client.Deploy(cmd.Context(), config.Path)
+	// Config has been gathered from the environment, from the user and merged
+	// into the in-memory Function.  It has potentially also been built, and
+	// the remote or local deploy succeeded with those settings.  All of
+	// which result in a Funciton object which is now out of sync with its
+	// on-disk representation.
+	return f.Write()
 }
 
 func newPromptForCredentials(in io.Reader, out, errOut io.Writer) func(registry string) (docker.Credentials, error) {
@@ -390,6 +482,15 @@ you can install docker credential helper https://github.com/docker/docker-creden
 type deployConfig struct {
 	buildConfig
 
+	// Perform build using the settings from the embedded buildConfig struct.
+	// Acceptable values are the keyword 'auto', or a truthy value such as
+	// 'true', 'false, '1' or '0'.
+	Build string
+
+	// Remote indicates the deployment (and possibly build) process are to
+	// be triggered in a remote environment rather than run locally.
+	Remote bool
+
 	// Namespace override for the deployed function.  If provided, the
 	// underlying platform will be instructed to deploy the function to the given
 	// namespace (if such a setting is applicable; such as for Kubernetes
@@ -408,9 +509,6 @@ type deployConfig struct {
 	// Confirm: confirm values arrived upon from environment plus flags plus defaults,
 	// with interactive prompting (only applicable when attached to a TTY).
 	Confirm bool
-
-	// Build the associated function before deploying.
-	BuildType string
 
 	// Push function image to the registry before deploying.
 	Push bool
@@ -439,20 +537,14 @@ func newDeployConfig(cmd *cobra.Command) (deployConfig, error) {
 		return deployConfig{}, err
 	}
 
-	// We need to know whether the `build`` flag had been explicitly set,
-	// to distinguish between unset and default value.
-	var buildType string
-	if viper.IsSet("build") {
-		buildType = viper.GetString("build")
-	}
-
 	return deployConfig{
 		buildConfig: newBuildConfig(),
+		Build:       viper.GetString("build"),
+		Remote:      viper.GetBool("remote"),
 		Namespace:   viper.GetString("namespace"),
 		Path:        viper.GetString("path"),
 		Verbose:     viper.GetBool("verbose"), // defined on root
 		Confirm:     viper.GetBool("confirm"),
-		BuildType:   buildType,
 		Push:        viper.GetBool("push"),
 		EnvToUpdate: envToUpdate,
 		EnvToRemove: envToRemove,
@@ -519,17 +611,6 @@ func (c deployConfig) Prompt() (deployConfig, error) {
 	return dc, nil
 }
 
-// ErrInvalidBuildType indicates that the passed build type was invalid.
-type ErrInvalidBuildType error
-
-// ValidateBuildType validatest that the input Build type is valid for deploy command
-func validateBuildType(buildType string) error {
-	if errs := fn.ValidateBuildType(buildType, false, true); len(errs) > 0 {
-		return ErrInvalidBuildType(errors.New(strings.Join(errs, "")))
-	}
-	return nil
-}
-
 func parseImageDigest(imageSplit []string, config deployConfig, cmd *cobra.Command) (deployConfig, error) {
 
 	if !strings.HasPrefix(imageSplit[1], "sha256:") {
@@ -552,7 +633,6 @@ func parseImageDigest(imageSplit []string, config deployConfig, cmd *cobra.Comma
 
 	fmt.Printf("Deploying existing image with digest %s. Build and push are disabled.\n", imageSplit[1])
 
-	config.BuildType = "disabled"
 	config.Push = false
 	config.Image = imageSplit[0]
 

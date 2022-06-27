@@ -1,5 +1,7 @@
 package function
 
+/*
+
 import (
 	"fmt"
 )
@@ -53,3 +55,4 @@ func SupportedBuildTypes(allowDisabledBuildType bool) string {
 
 	return fmt.Sprintf("%s\"%s\" or \"%s\"", msg, BuildTypeLocal, BuildTypeGit)
 }
+*/

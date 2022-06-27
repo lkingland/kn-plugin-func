@@ -56,12 +56,7 @@ type Function struct {
 	// SHA256 hash of the latest image that has been built
 	ImageDigest string `yaml:"imageDigest"`
 
-	// BuildType represents the specified way of building the fuction
-	// ie. "local" or "git"
-	BuildType string `yaml:"build" jsonschema:"enum=local,enum=git"`
-
-	// Git stores information about remote git repository,
-	// in case build type "git" is being used
+	// Git stores information about an optionally associated git repository.
 	Git Git `yaml:"git"`
 
 	// BuilderImages define optional explicit builder images to use by
@@ -143,9 +138,6 @@ func NewFunctionWith(defaults Function) Function {
 	if defaults.Template == "" {
 		defaults.Template = DefaultTemplate
 	}
-	if defaults.BuildType == "" {
-		defaults.BuildType = DefaultBuildType
-	}
 	return defaults
 }
 
@@ -190,12 +182,6 @@ func (f Function) Validate() error {
 		return errors.New("function root path is required")
 	}
 
-	// if build type == git, we need to check that Git options are specified as well
-	mandatoryGitOption := false
-	if f.BuildType == BuildTypeGit {
-		mandatoryGitOption = true
-	}
-
 	var ctr int
 	errs := [][]string{
 		validateVolumes(f.Volumes),
@@ -203,8 +189,7 @@ func (f Function) Validate() error {
 		ValidateEnvs(f.Envs),
 		validateOptions(f.Options),
 		ValidateLabels(f.Labels),
-		ValidateBuildType(f.BuildType, true, false),
-		validateGit(f.Git, mandatoryGitOption),
+		validateGit(f.Git),
 	}
 
 	var b strings.Builder

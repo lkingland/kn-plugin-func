@@ -7,184 +7,142 @@ import (
 	"testing"
 
 	"github.com/ory/viper"
-	"k8s.io/utils/pointer"
 	fn "knative.dev/kn-plugin-func"
 	"knative.dev/kn-plugin-func/mock"
 	. "knative.dev/kn-plugin-func/testing"
 )
 
-func Test_runDeploy(t *testing.T) {
-	tests := []struct {
-		name                 string
-		gitURL               string
-		gitBranch            string
-		gitDir               string
-		buildType            string
-		funcFile             string
-		expectFileURL        *string
-		expectFileBranch     *string
-		expectFileContextDir *string
-		expectCallURL        *string
-		expectCallBranch     *string
-		expectCallContextDir *string
-		errString            string
-	}{
-		{
-			name:      "Git arguments don't get saved to func.yaml but are used in the pipeline invocation",
-			gitURL:    "git@github.com:knative-sandbox/kn-plugin-func.git",
-			gitBranch: "main",
-			gitDir:    "func",
-			buildType: fn.BuildTypeGit,
-			funcFile: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00`,
-			expectCallURL:        pointer.StringPtr("git@github.com:knative-sandbox/kn-plugin-func.git"),
-			expectCallBranch:     pointer.StringPtr("main"),
-			expectCallContextDir: pointer.StringPtr("func"),
-		},
-		{
-			name:      "Git url gets split when in the format url#branch",
-			gitURL:    "git@github.com:knative-sandbox/kn-plugin-func.git#main",
-			gitDir:    "func",
-			buildType: fn.BuildTypeGit,
-			funcFile: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00`,
-			expectCallURL:        pointer.StringPtr("git@github.com:knative-sandbox/kn-plugin-func.git"),
-			expectCallBranch:     pointer.StringPtr("main"),
-			expectCallContextDir: pointer.StringPtr("func"),
-		},
-		{
-			name:      "Git arguments override func.yaml but don't get saved",
-			gitURL:    "git@github.com:knative-sandbox/kn-plugin-func.git",
-			gitBranch: "main",
-			gitDir:    "func",
-			funcFile: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00
-build: git
-git:
-  url: git@github.com:my-repo/my-function.git
-  revision: master
-  contextDir: pwd`,
-			expectCallURL:        pointer.StringPtr("git@github.com:knative-sandbox/kn-plugin-func.git"),
-			expectCallBranch:     pointer.StringPtr("main"),
-			expectCallContextDir: pointer.StringPtr("func"),
-			expectFileURL:        pointer.StringPtr("git@github.com:my-repo/my-function.git"),
-			expectFileBranch:     pointer.StringPtr("master"),
-			expectFileContextDir: pointer.StringPtr("pwd"),
-		},
-		{
-			name: "Git properties work without arguments",
-			funcFile: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00
-build: git
-git:
-  url: git@github.com:my-repo/my-function.git
-  revision: master
-  contextDir: pwd`,
-			expectFileURL:        pointer.StringPtr("git@github.com:my-repo/my-function.git"),
-			expectFileBranch:     pointer.StringPtr("master"),
-			expectFileContextDir: pointer.StringPtr("pwd"),
-			expectCallURL:        pointer.StringPtr("git@github.com:my-repo/my-function.git"),
-			expectCallBranch:     pointer.StringPtr("master"),
-			expectCallContextDir: pointer.StringPtr("pwd"),
-		},
-		{
-			name:      "check error when providing git flags with buildType local",
-			gitURL:    "git@github.com:my-repo/my-function.git",
-			buildType: "local",
-			funcFile: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00`,
-			errString: "remote git arguments require the --build=git flag",
-		},
-	}
+// TestDeploy_RemoteBuildURLPermutations ensures that the remote, build and git-url flags
+// are properly respected.
+func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
+	// Valid flag permutations (empty indicates flag should be omitted)
+	// and a functon which will convert a permutation into flags for use
+	// by the subtests.
+	var (
+		remoteValues = []string{"", "true", "false"}
+		buildValues  = []string{"", "true", "false", "auto"}
+		urlValues    = []string{"", "https://example.com/user/repo"}
 
-	defer WithEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))()
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var captureFn fn.Function
-			pipeline := &mock.PipelinesProvider{
-				RunFn: func(f fn.Function) error {
-					captureFn = f
-					return nil
-				},
+		toArgs = func(remote string, build string, url string) []string {
+			args := []string{}
+			if remote != "" {
+				args = append(args, fmt.Sprintf("--remote=%v", remote))
 			}
-			deployer := mock.NewDeployer()
-			defer Fromtemp(t)()
-			cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-				return fn.New(
-					fn.WithPipelinesProvider(pipeline),
-					fn.WithDeployer(deployer))
-			}))
-			cmd.SetArgs([]string{}) // Do not use test command args
+			if build != "" {
+				args = append(args, fmt.Sprintf("--build=%v", build))
+			}
+			if url != "" {
+				args = append(args, fmt.Sprintf("--git-url=%v", build))
+			}
+			return args
+		}
+	)
 
-			// TODO: the below viper.SetDefault calls appear to be altering
-			// the default values of flags as a way set various values of flags.
-			// This could perhaps be better achieved by constructing an array
-			// of flag arguments, set via cmd.SetArgs(...).  This would more directly
-			// test the use-case of flag values (as opposed to the indirect proxy
-			// of their defaults), and would avoid the need to call viper.Reset() to
-			// avoid affecting other tests.
-			viper.SetDefault("git-url", tt.gitURL)
-			viper.SetDefault("git-branch", tt.gitBranch)
-			viper.SetDefault("git-dir", tt.gitDir)
-			viper.SetDefault("build", tt.buildType)
-			viper.SetDefault("registry", "docker.io/tigerteam")
-			defer viper.Reset()
+	// returns a single test function for one possible permutation of the flags.
+	newTestFn := func(remote string, build string, url string) func(t *testing.T) {
+		return func(t *testing.T) {
+			root, rm := Mktemp(t)
+			defer rm()
 
-			// set test case's func.yaml
-			if err := os.WriteFile("func.yaml", []byte(tt.funcFile), os.ModePerm); err != nil {
+			// Create a new Funciton in the temp directory
+			if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
 				t.Fatal(err)
 			}
 
-			ctx := context.Background()
+			// deploy it using the deploy commnand with flags set to the currently
+			// effective flag permutation.
+			var (
+				deployer  = mock.NewDeployer()
+				builder   = mock.NewBuilder()
+				pipeliner = mock.NewPipelinesProvider()
+				cmd       = NewDeployCmd(NewClientFactory(func() *fn.Client {
+					return fn.New(fn.WithDeployer(deployer), fn.WithBuilder(builder), fn.WithPipelinesProvider(pipeliner))
+				}))
+			)
+			cmd.SetArgs(toArgs(remote, build, url))
+			err := cmd.Execute()
 
-			_, err := cmd.ExecuteContextC(ctx)
+			// Assertions
+
+			// LOCAL/REMOTE?
+			if remote == "" || remote == "false" { // default is remote false.
+				if !deployer.DeployInvoked {
+					t.Error("local deployer not invoked")
+				}
+				if pipeliner.RunInvoked {
+					t.Error("remote was invoked")
+				}
+			} else {
+				// Remote was enabled.
+				if !pipeliner.RunInvoked {
+					t.Error("remote was not invoked")
+				}
+				if deployer.DeployInvoked {
+					t.Error("local deployer was invoked")
+				}
+			}
+
+			// BUILD?
+			if build == "" || build == "true" || build == "auto" {
+				// The default case for build is auto, which is equivalent to true
+				// for a newly created Function which has not yet been built.
+				if !builder.BuildInvoked && remote != "true" {
+					t.Error("local builder not invoked")
+				}
+
+				// TODO: (enhancement) Check if the remote was invoked with building
+				// enabled (forced or auto) when --remote.
+			} else {
+				// Build was explicitly disabled.
+				if builder.BuildInvoked {
+					t.Error("local builder was invoked")
+				}
+
+				// TODO: (enhancement) Check that the remote was invoked with building
+				// expressly disabled (a redeploy).
+			}
+
+			// GIT OR TARBALL?
+			if url == "" {
+				// TODO: (enhancement) Check that the remote is invoked with a directive
+				// to send a tarball of the local filesystem when remote is enabled but
+				// no git URL was provided insted of the current test which:
+
+				// Check an error is generated when attempting to run a remote build
+				// without providing this value.
+				if err == nil {
+					t.Fatal("error expected when --remote without a --git-url")
+				}
+
+			} else {
+				// TODO: (enhancement) Check that the local builder is invoked with a
+				// directive to use a git repo rather than the local filesystem if
+				// building is enabled.
+			}
 			if err != nil {
-				if tt.errString == "" {
-					t.Fatalf("Problem executing command: %v", err)
-				} else if err := err.Error(); tt.errString != err {
-					t.Fatalf("Error expected to be %v but was %v", tt.errString, err)
-				}
+				t.Fatal(err)
 			}
+		}
+	}
 
-			fileFunction, err := fn.NewFunction(".")
-
-			if err != nil {
-				t.Fatalf("problem creating function: %v", err)
+	// Run all permutations
+	for _, remote := range remoteValues {
+		for _, build := range buildValues {
+			for _, url := range urlValues {
+				// Run a subtest whose name is set to the args permutation tested.
+				name := fmt.Sprintf("%v", toArgs(remote, build, url))
+				t.Run(name, newTestFn(remote, build, url))
 			}
-
-			{
-				if fileURL, expectedURL := pointer.StringPtrDerefOr(fileFunction.Git.URL, ""), pointer.StringPtrDerefOr(tt.expectFileURL, ""); fileURL != expectedURL {
-					t.Fatalf("file Git URL expected to be (%v) but was (%v)", expectedURL, fileURL)
-				}
-				if fileBranch, expectedBranch := pointer.StringPtrDerefOr(fileFunction.Git.Revision, ""), pointer.StringPtrDerefOr(tt.expectFileBranch, ""); fileBranch != expectedBranch {
-					t.Fatalf("file Git branch expected to be (%v) but was (%v)", expectedBranch, fileBranch)
-				}
-				if fileDir, expectedDir := pointer.StringPtrDerefOr(fileFunction.Git.ContextDir, ""), pointer.StringPtrDerefOr(tt.expectFileContextDir, ""); fileDir != expectedDir {
-					t.Fatalf("file Git contextDir expected to be (%v) but was (%v)", expectedDir, fileDir)
-				}
-			}
-
-			{
-				if caputureURL, expectedURL := pointer.StringPtrDerefOr(captureFn.Git.URL, ""), pointer.StringPtrDerefOr(tt.expectCallURL, ""); caputureURL != expectedURL {
-					t.Fatalf("call Git URL expected to be (%v) but was (%v)", expectedURL, caputureURL)
-				}
-				if captureBranch, expectedBranch := pointer.StringPtrDerefOr(captureFn.Git.Revision, ""), pointer.StringPtrDerefOr(tt.expectCallBranch, ""); captureBranch != expectedBranch {
-					t.Fatalf("call Git Branch expected to be (%v) but was (%v)", expectedBranch, captureBranch)
-				}
-				if captureDir, expectedDir := pointer.StringPtrDerefOr(captureFn.Git.ContextDir, ""), pointer.StringPtrDerefOr(tt.expectCallContextDir, ""); captureDir != expectedDir {
-					t.Fatalf("call Git Dir expected to be (%v) but was (%v)", expectedDir, captureDir)
-				}
-			}
-		})
+		}
 	}
 }
 
 func Test_imageWithDigest(t *testing.T) {
+	// TODO(lkingland): this test relies on a side-effect of the client library
+	// dependency:  the format and even existence of the func.yaml.  Since this
+	// is the CLI package (cmd), This test would be more correct if refactored to
+	// instantiate a command struct and invoke it using explicit argments (see
+	// other tests this file).
 	tests := []struct {
 		name      string
 		image     string
@@ -282,6 +240,9 @@ func TestDeploy_BuilderPersistence(t *testing.T) {
 }
 
 func Test_namespaceCheck(t *testing.T) {
+	// TODO(lkingland): see comment in Test_imageWithDigest. May be better to
+	// refactor this test to use command struct and execute using arguments
+	// (see other tests this file)
 	tests := []struct {
 		name      string
 		registry  string
@@ -365,3 +326,129 @@ runtime: go`,
 		})
 	}
 }
+
+// TestDeploy_GitArgsPersist ensures that the git flags, if provided, are
+// persisted to the Function for subsequent deployments.
+func TestDeploy_GitArgsPersist(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	var (
+		url    = "https://example.com/user/repo"
+		branch = "main"
+		dir    = "function"
+	)
+
+	// Create a new Function in the temp directory
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Deploy the Function specifying all of the git-related flags
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()))
+	}))
+	cmd.SetArgs([]string{"--remote", "--git-url=" + url, "--git-branch=" + branch, "--git-dir=" + dir, "."})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load the Function and ensure the flags were stored.
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Git.URL != url {
+		t.Errorf("expected git URL '%v' got '%v'", url, f.Git.URL)
+	}
+	if f.Git.Revision != branch {
+		t.Errorf("expected git branch '%v' got '%v'", branch, f.Git.Revision)
+	}
+	if f.Git.ContextDir != dir {
+		t.Errorf("expected git dir '%v' got '%v'", dir, f.Git.ContextDir)
+	}
+}
+
+// TestDeploy_GitArgsUsed ensures that any git values provided as flags are used
+// when invoking a remote deployment.
+func TestDeploy_GitArgsUsed(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	var (
+		url    = "https://example.com/user/repo"
+		branch = "main"
+		dir    = "function"
+	)
+	// Create a new Function in the temp dir
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	// A Pipelines Provider which will validate the expected values were received
+	pipeliner := mock.NewPipelinesProvider()
+	pipeliner.RunFn = func(f fn.Function) error {
+		if f.Git.URL != url {
+			t.Errorf("Pipeline Provider expected git URL '%v' got '%v'", url, f.Git.URL)
+		}
+		if f.Git.Revision != branch {
+			t.Errorf("Pipeline Provider expected git branch '%v' got '%v'", branch, f.Git.Revision)
+		}
+		if f.Git.ContextDir != dir {
+			t.Errorf("Pipeline Provider expected git dir '%v' got '%v'", url, f.Git.ContextDir)
+		}
+		return nil
+	}
+
+	// Deploy the Function specifying all of the git-related flags and --remote
+	// such that the mock pipelines provider is invoked.
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(fn.WithPipelinesProvider(pipeliner))
+	}))
+
+	cmd.SetArgs([]string{"--remote=true", "--git-url=" + url, "--git-branch=" + branch, "--git-dir=" + dir})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDeploy_GitURLBranch ensures that a --git-url which specifies the branch
+// in the URL is equivalent to providing --git-branch
+func TestDeploy_GitURLBranch(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	var (
+		url            = "https://example.com/user/repo#branch"
+		expectedUrl    = "https://example.com/user/repo"
+		expectedBranch = "branch"
+	)
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()))
+	}))
+	cmd.SetArgs([]string{"--remote", "--git-url=" + url})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Git.URL != expectedUrl {
+		t.Errorf("expected git URL '%v' got '%v'", expectedUrl, f.Git.URL)
+	}
+	if f.Git.Revision != expectedBranch {
+		t.Errorf("expected git branch '%v' got '%v'", expectedBranch, f.Git.Revision)
+	}
+}
+
+// TODO: Test that an error is generated if --git-url includes a branch and
+// --git-branch is provided.
+
+// TODO:  --save

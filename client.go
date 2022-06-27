@@ -32,8 +32,8 @@ const (
 	// XDG_CONFIG_HOME set, and no WithConfigPath was used.
 	DefaultConfigPath = ".config/func"
 
-	// DefaultBuildType is the default build type for a function
-	DefaultBuildType = BuildTypeLocal
+	// DefaultBuildType is the default build type for a Function
+	// DefaultBuildType = BuildTypeLocal
 
 	// RunDataDir holds transient runtime metadata
 	// By default it is excluded from source control.
@@ -711,28 +711,13 @@ func (c *Client) Deploy(ctx context.Context, path string) (err error) {
 	return err
 }
 
-// RunPipeline runs a Pipeline to Build and deploy the function at path.
-func (c *Client) RunPipeline(ctx context.Context, path string, git Git) (err error) {
+// RunPipeline runs a Pipeline to build and deploy the Function.
+func (c *Client) RunPipeline(ctx context.Context, f Function) (err error) {
 	go func() {
 		<-ctx.Done()
 		c.progressListener.Stopping()
 	}()
-
-	f, err := NewFunction(path)
-	if err != nil {
-		err = fmt.Errorf("failed to laod function: %w", err)
-		return
-	}
-	f.Git = git
-
-	// Build and deploy function using Pipeline
-	err = c.pipelinesProvider.Run(ctx, f)
-	if err != nil {
-		err = fmt.Errorf("failed to run pipeline: %w", err)
-		return
-	}
-
-	return err
+	return c.pipelinesProvider.Run(ctx, f)
 }
 
 func (c *Client) Route(path string) (err error) {
