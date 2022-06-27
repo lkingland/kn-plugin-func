@@ -32,9 +32,6 @@ const (
 	// XDG_CONFIG_HOME set, and no WithConfigPath was used.
 	DefaultConfigPath = ".config/func"
 
-	// DefaultBuildType is the default build type for a Function
-	// DefaultBuildType = BuildTypeLocal
-
 	// RunDataDir holds transient runtime metadata
 	// By default it is excluded from source control.
 	RunDataDir = ".func"

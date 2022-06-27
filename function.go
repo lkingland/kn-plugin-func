@@ -57,7 +57,7 @@ type Function struct {
 	ImageDigest string `yaml:"imageDigest"`
 
 	// Git stores information about an optionally associated git repository.
-	Git Git `yaml:"git"`
+	Git Git `yaml:"git,omitempty"`
 
 	// BuilderImages define optional explicit builder images to use by
 	// builder implementations in leau of the in-code defaults.  They key
