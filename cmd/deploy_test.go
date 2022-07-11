@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -12,8 +13,134 @@ import (
 	. "knative.dev/kn-plugin-func/testing"
 )
 
+const TestRegistry = "example.com/alice"
+
+// TestDeploy_Default ensures that running deploy on a valid default Function
+// (only required options populated; all else deafult) completes successfully.
+func TestDeploy_Default(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	// A Function with the minimum required values for deployment populated.
+	f := fn.Function{
+		Root:     root,
+		Name:     "myfunc",
+		Runtime:  "go",
+		Registry: "example.com/alice",
+	}
+	if err := fn.New().Create(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Deploy using an instance of the deploy command which uses a fully default
+	// (noop filled) Client.  Execution should complete without error.
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New()
+	}))
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDeploy_RegistryOrImageRequired ensures that when no registry or image are
+// provided, and the client has not been instantiated with a default registry,
+// an ErrRegistryRequired is received.
+func TestDeploy_RegistryOrImageRequired(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New()
+	}))
+
+	// If neither --registry nor --image are provided, and the client was not
+	// instantiated with a default registry, a ErrRegistryRequired is expected.
+	cmd.SetArgs([]string{}) // this explicit clearing of args may not be necessary
+	if err := cmd.Execute(); err != nil {
+		if !errors.Is(err, ErrRegistryRequired) {
+			t.Fatalf("expected ErrRegistryRequired, got error: %v", err)
+		}
+	}
+
+	// earlire test covers the --registry only case, test here that --image
+	// also succeeds.
+	cmd.SetArgs([]string{"--image=example.com/alice/myfunc"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestDeploy_ImageAndRegistry ensures that both --image and --registry flags
+// are persisted to the Function and visible downstream to the deployer
+// (plumbed through and persisted without being exclusive)
+func TestDeploy_ImageAndRegistry(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	var (
+		deployer = mock.NewDeployer()
+		cmd      = NewDeployCmd(NewClientFactory(func() *fn.Client {
+			return fn.New(fn.WithDeployer(deployer), fn.WithRegistry(TestRegistry))
+		}))
+	)
+
+	// If only --registry is provided:
+	// the resultant Function should have the regsitry populated and image
+	// derived from the name.
+	cmd.SetArgs([]string{"--registry=example.com/alice"})
+	deployer.DeployFn = func(f fn.Function) error {
+		if f.Registry != "example.com/alice" {
+			t.Fatal("registry flag not provided to deployer")
+		}
+		return nil
+	}
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	// If only --image is provided:
+	// the deploy should not fail, and the resultant Function should have the
+	// Image member set to what was explicitly provided via the --image flag
+	// (not a derived name)
+	cmd.SetArgs([]string{"--image=example.com/alice/myfunc"})
+	deployer.DeployFn = func(f fn.Function) error {
+		if f.Image != "example.com/alice/myfunc" {
+			t.Fatalf("deployer expected f.Image 'example.com/alice/myfunc', got '%v'", f.Image)
+		}
+		return nil
+	}
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	// If both --registry and --image are provided:
+	// they should both be plumbed through such that downstream agents (deployer
+	// in this case) see them set on the Function and can act accordingly.
+	cmd.SetArgs([]string{"--registry=example.com/alice", "--image=example.com/alice/subnamespace/myfunc"})
+	deployer.DeployFn = func(f fn.Function) error {
+		if f.Registry != "example.com/alice" {
+			t.Fatal("registry flag value not seen on the Function by the deployer")
+		}
+		if f.Image != "example.com/alice/subnamespace/myfunc" {
+			t.Fatal("image flag value not seen on the Funciton by deployer")
+		}
+		return nil
+	}
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestDeploy_RemoteBuildURLPermutations ensures that the remote, build and git-url flags
-// are properly respected.
+// are properly respected for all permutations, including empty.
 func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 	// Valid flag permutations (empty indicates flag should be omitted)
 	// and a functon which will convert a permutation into flags for use
@@ -23,7 +150,7 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 		buildValues  = []string{"", "true", "false", "auto"}
 		urlValues    = []string{"", "https://example.com/user/repo"}
 
-		toArgs = func(remote string, build string, url string) []string {
+		toArgs = func(remote, build, url string) []string {
 			args := []string{}
 			if remote != "" {
 				args = append(args, fmt.Sprintf("--remote=%v", remote))
@@ -32,14 +159,14 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 				args = append(args, fmt.Sprintf("--build=%v", build))
 			}
 			if url != "" {
-				args = append(args, fmt.Sprintf("--git-url=%v", build))
+				args = append(args, fmt.Sprintf("--git-url=%v", url))
 			}
 			return args
 		}
 	)
 
 	// returns a single test function for one possible permutation of the flags.
-	newTestFn := func(remote string, build string, url string) func(t *testing.T) {
+	newTestFn := func(remote, build, url string) func(t *testing.T) {
 		return func(t *testing.T) {
 			root, rm := Mktemp(t)
 			defer rm()
@@ -56,69 +183,101 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 				builder   = mock.NewBuilder()
 				pipeliner = mock.NewPipelinesProvider()
 				cmd       = NewDeployCmd(NewClientFactory(func() *fn.Client {
-					return fn.New(fn.WithDeployer(deployer), fn.WithBuilder(builder), fn.WithPipelinesProvider(pipeliner))
+					return fn.New(
+						fn.WithDeployer(deployer),
+						fn.WithBuilder(builder),
+						fn.WithPipelinesProvider(pipeliner),
+						fn.WithRegistry(TestRegistry),
+					)
 				}))
 			)
 			cmd.SetArgs(toArgs(remote, build, url))
 			err := cmd.Execute()
 
 			// Assertions
+			if remote != "" && remote != "false" { // default "" is == false.
+				// REMOTE Assertions
 
-			// LOCAL/REMOTE?
-			if remote == "" || remote == "false" { // default is remote false.
-				if !deployer.DeployInvoked {
-					t.Error("local deployer not invoked")
+				// TODO: (enhancement) allow triggering remote deploy without Git.
+				// This would tar up the local filesystem and send it to the cluster
+				// build and deploy. For now URL is required when triggering remote.
+				if url == "" && err == nil {
+					t.Fatal("error expected when --remote without a --git-url")
+				} else {
+					return // test successfully confirmed this error case
 				}
+
+				if !pipeliner.RunInvoked { // Remote deployer should be triggered
+					t.Error("remote was not invoked")
+				}
+				if deployer.DeployInvoked { // Local deployer should not be triggered
+					t.Error("local deployer was invoked")
+				}
+				if builder.BuildInvoked { // Local builder should not be triggered
+					t.Error("local builder invoked")
+				}
+
+				// BUILD?
+				// TODO: (enhancement) Remote deployments respect build flag values
+				// of off/on/auto
+
+				// Source Location
+				// TODO: (enhancement) if git url is not provided, send local source
+				// to remote deployer for use when building.
+
+			} else {
+				// LOCAL Assertions
+
+				// TODO: (enhancement) allow --git-url when running local deployment.
+				// Check that the local builder is invoked with a directive to use a
+				// git repo rather than the local filesystem if building is enabled and
+				// a url is provided.  For now it throws an error statign that git-url
+				// is only used when --remote
+				if url != "" && err == nil {
+					t.Fatal("error expected when deploying from local but provided --git-url")
+					return
+				} else if url != "" && err != nil {
+					return // test successfully confirmed this is an error case
+				}
+
+				// Remote deployer should never be triggered when deploying via local
 				if pipeliner.RunInvoked {
 					t.Error("remote was invoked")
 				}
-			} else {
-				// Remote was enabled.
-				if !pipeliner.RunInvoked {
-					t.Error("remote was not invoked")
+
+				// BUILD?
+				if build == "" || build == "true" || build == "auto" {
+					// The default case for build is auto, which is equivalent to true
+					// for a newly created Function which has not yet been built.
+					if !builder.BuildInvoked {
+						t.Error("local builder not invoked")
+					}
+					if !deployer.DeployInvoked {
+						t.Error("local deployer not invoked")
+					}
+
+				} else {
+					// Build was explicitly disabled.
+					if builder.BuildInvoked { // builder should not be invoked
+						t.Error("local builder was invoked when building disabled")
+					}
+					if deployer.DeployInvoked { // deployer should not be invoked
+						t.Error("local deployer was invoked for an unbuilt Function")
+					}
+					if err == nil { // Should error that it is not built
+						t.Error("expected 'error: not built' not received")
+					} else {
+						return // test successfully confirmed this is an expected error case
+					}
+
+					// IF build was explicitly disabled, but the Function has already
+					// been built, it should invoke the deployer.
+					// TODO
+
 				}
-				if deployer.DeployInvoked {
-					t.Error("local deployer was invoked")
-				}
+
 			}
 
-			// BUILD?
-			if build == "" || build == "true" || build == "auto" {
-				// The default case for build is auto, which is equivalent to true
-				// for a newly created Function which has not yet been built.
-				if !builder.BuildInvoked && remote != "true" {
-					t.Error("local builder not invoked")
-				}
-
-				// TODO: (enhancement) Check if the remote was invoked with building
-				// enabled (forced or auto) when --remote.
-			} else {
-				// Build was explicitly disabled.
-				if builder.BuildInvoked {
-					t.Error("local builder was invoked")
-				}
-
-				// TODO: (enhancement) Check that the remote was invoked with building
-				// expressly disabled (a redeploy).
-			}
-
-			// GIT OR TARBALL?
-			if url == "" {
-				// TODO: (enhancement) Check that the remote is invoked with a directive
-				// to send a tarball of the local filesystem when remote is enabled but
-				// no git URL was provided insted of the current test which:
-
-				// Check an error is generated when attempting to run a remote build
-				// without providing this value.
-				if err == nil {
-					t.Fatal("error expected when --remote without a --git-url")
-				}
-
-			} else {
-				// TODO: (enhancement) Check that the local builder is invoked with a
-				// directive to use a git repo rather than the local filesystem if
-				// building is enabled.
-			}
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -126,6 +285,7 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 	}
 
 	// Run all permutations
+	// Run a subtest whose name is set to the args permutation tested.
 	for _, remote := range remoteValues {
 		for _, build := range buildValues {
 			for _, url := range urlValues {
@@ -346,7 +506,7 @@ func TestDeploy_GitArgsPersist(t *testing.T) {
 
 	// Deploy the Function specifying all of the git-related flags
 	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()))
+		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()), fn.WithRegistry(TestRegistry))
 	}))
 	cmd.SetArgs([]string{"--remote", "--git-url=" + url, "--git-branch=" + branch, "--git-dir=" + dir, "."})
 	if err := cmd.Execute(); err != nil {
@@ -403,7 +563,7 @@ func TestDeploy_GitArgsUsed(t *testing.T) {
 	// Deploy the Function specifying all of the git-related flags and --remote
 	// such that the mock pipelines provider is invoked.
 	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-		return fn.New(fn.WithPipelinesProvider(pipeliner))
+		return fn.New(fn.WithPipelinesProvider(pipeliner), fn.WithRegistry(TestRegistry))
 	}))
 
 	cmd.SetArgs([]string{"--remote=true", "--git-url=" + url, "--git-branch=" + branch, "--git-dir=" + dir})
@@ -428,7 +588,7 @@ func TestDeploy_GitURLBranch(t *testing.T) {
 		expectedBranch = "branch"
 	)
 	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()))
+		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()), fn.WithRegistry(TestRegistry))
 	}))
 	cmd.SetArgs([]string{"--remote", "--git-url=" + url})
 

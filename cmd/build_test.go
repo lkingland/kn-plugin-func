@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -16,41 +15,27 @@ import (
 // TestBuild_InvalidRegistry ensures that running build specifying the name of the
 // registry explicitly as an argument invokes the registry validation code.
 func TestBuild_InvalidRegistry(t *testing.T) {
-	var (
-		args    = []string{"--registry", "foo/bar/foobar/boofar"} // provide an invalid registry name
-		builder = mock.NewBuilder()                               // with a mock builder
-	)
+	root, rm := Mktemp(t)
+	defer rm()
 
-	// Run this test in a temporary directory
-	defer Fromtemp(t)()
-	// Write a func.yaml config which does not specify an image
-	funcYaml := `name: testymctestface
-namespace: ""
-runtime: go
-image: ""
-imageDigest: ""
-builder: quay.io/boson/faas-go-builder
-builders:
-  default: quay.io/boson/faas-go-builder
-envs: []
-annotations: {}
-labels: []
-created: 2021-01-01T00:00:00+00:00
-`
-	if err := ioutil.WriteFile("func.yaml", []byte(funcYaml), 0600); err != nil {
+	f := fn.Function{
+		Root:    root,
+		Name:    "myFunc",
+		Runtime: "go",
+	}
+	if err := fn.New().Create(f); err != nil {
 		t.Fatal(err)
 	}
 
-	// Create build command that will use a mock builder.
 	cmd := NewBuildCmd(NewClientFactory(func() *fn.Client {
-		return fn.New(fn.WithBuilder(builder))
+		return fn.New()
 	}))
 
-	// Execute the command
-	cmd.SetArgs(args)
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("Expected error")
+	cmd.SetArgs([]string{"--registry=foo/bar/invald/myfunc"})
+
+	if err := cmd.Execute(); err == nil {
+		// TODO: typed ErrInvalidRegistry
+		t.Fatal("invalid registry did not generate expected error")
 	}
 }
 
@@ -71,25 +56,6 @@ runtime: go
 created: 2009-11-10 23:00:00`,
 			shouldBuild: true,
 			shouldPush:  true,
-		},
-		{
-			name:     "do not push when --push=false",
-			pushFlag: false,
-			fileContents: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00`,
-			shouldBuild: true,
-			shouldPush:  false,
-		},
-		{
-			name:     "push flag with failing push",
-			pushFlag: true,
-			fileContents: `name: test-func
-runtime: go
-created: 2009-11-10 23:00:00`,
-			shouldBuild: true,
-			shouldPush:  true,
-			wantErr:     true,
 		},
 	}
 	for _, tt := range tests {

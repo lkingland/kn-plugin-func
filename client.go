@@ -365,10 +365,10 @@ func WithRepository(uri string) Option {
 	}
 }
 
-// WithRegistry sets the default registry which is consulted when an image name/tag
-// is not explocitly provided.  Can be fully qualified, including the registry
-// (ex: 'quay.io/myname') or simply the namespace 'myname' which indicates the
-// the use of the default registry.
+// WithRegistry sets the default registry which is consulted when an image
+// name is not explicitly provided.  Can be fully qualified, including the
+// registry and namespace (ex: 'quay.io/myname') or simply the namespace
+// (ex: 'myname').
 func WithRegistry(registry string) Option {
 	return func(c *Client) {
 		c.registry = registry
@@ -405,6 +405,12 @@ func (c *Client) Templates() *Templates {
 // Instances accessor
 func (c *Client) Instances() *Instances {
 	return c.instances
+}
+
+// Repository accessor returns the default registry for use when building
+// Functions which do not specify Registry or Image name explicitly.
+func (c *Client) Registry() string {
+	return c.registry
 }
 
 // Runtimes available in totality.
@@ -619,9 +625,19 @@ func (c *Client) Build(ctx context.Context, path string) (err error) {
 		return
 	}
 
-	// Derive Image from the path (precedence is given to extant config)
-	if f.Image, err = DerivedImage(path, c.registry); err != nil {
-		return
+	// Building requires a registry.
+	if f.Registry == "" {
+		f.Registry = c.registry
+	}
+
+	// If no image name has been yet defined, calculate one.
+	// Stored on the Function for later use by deploy, etc.
+	// TODO: write this to .func/build instead, and populate f.Image on deploy
+	// such that local builds do not dirty the work tree.
+	if f.Image == "" {
+		if f.Image, err = f.ImageName(); err != nil {
+			return
+		}
 	}
 
 	if err = c.builder.Build(ctx, f); err != nil {

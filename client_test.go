@@ -364,9 +364,8 @@ func TestClient_New_RegistryRequired(t *testing.T) {
 	}
 }
 
-// TestClient_New_ImageNameDerived ensures that the full image (tag) of the resultant OCI
-// container is populated based of a derivation using configured registry
-// plus the service name.
+// TestClient_New_ImageNamePolulated ensures that the full image (tag) of the
+// resultant OCI container is populated.
 func TestClient_New_ImageNameDerived(t *testing.T) {
 	// Create the root function directory
 	root := "testdata/example.com/testDeriveImage"
@@ -384,10 +383,16 @@ func TestClient_New_ImageNameDerived(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// In form: [Default Registry]/[Registry Namespace]/[Service Name]:latest
-	expected := TestRegistry + "/" + f.Name + ":latest"
-	if f.Image != expected {
-		t.Fatalf("expected image '%v' got '%v'", expected, f.Image)
+	// This opaque-box unit test ensures NewImageTag is invoked and applied.
+	// See the Test_NewImageTag clea-box unit test for an in-depth exploration of
+	// how the values of image and registry are treated to create, by default:
+	//   [Default Registry]/[Registry Namespace]/[Service Name]:latest
+	imageTag, err := f.ImageName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Image != imageTag {
+		t.Fatalf("expected image '%v' got '%v'", imageTag, f.Image)
 	}
 }
 
@@ -572,9 +577,9 @@ func TestClient_Run_DataDir(t *testing.T) {
 	t.Errorf(".gitignore does not include '/%v' ignore directive", fn.RunDataDir)
 }
 
-// TestClient_Update ensures that the deployer properly invokes the build/push/deploy
+// TestClient_Deploy ensures that the deployer properly invokes the build/push/deploy
 // process, erroring if run on a directory uncreated.
-func TestClient_Update(t *testing.T) {
+func TestClient_Deploy(t *testing.T) {
 	var (
 		root          = "testdata/example.com/testUpdate"
 		expectedName  = "testUpdate"
@@ -677,6 +682,80 @@ func TestClient_Update(t *testing.T) {
 	if !deployerUpdated.DeployInvoked {
 		t.Fatal("deployer was not invoked")
 	}
+}
+
+// TestClient_Deploy_UnbuiltErrors ensures that a call to deploy a Function which was not
+// fully created (ie. was only initialized, not actually built and deploys)
+// yields an expected, and informative, error.
+func TestClient_Deploy_UnbuiltErrors(t *testing.T) {
+	root := "testdata/example.com/testDeployUnbuilt" // Root from which to run the test
+	defer Using(t, root)()
+
+	// New Client
+	client := fn.New(fn.WithRegistry(TestRegistry))
+
+	// Initialize (half-create) a new Function at root
+	if err := client.Create(fn.Function{Runtime: TestRuntime, Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now try to deploy it.  Ie. without having run the necessary build step.
+	err := client.Deploy(context.Background(), root)
+	if err == nil {
+		t.Fatal("did not receive an error attempting to deploy an unbuilt Function")
+	}
+
+	if !errors.Is(err, fn.ErrNotBuilt) {
+		t.Fatalf("did not receive expected error type.  Expected ErrNotBuilt, got %T", err)
+	}
+}
+
+// TestClient_Deploy_RegistryUpdate ensures that deploying a Function updates
+// its image member on initial deploy, and on subsequent deploy with an
+// updated registry.
+func Test_Deploy_RegistryUpdate(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+	client := fn.New(fn.WithRegistry(TestRegistry))
+
+	// Initial creation should result in the member being populated
+	if err := client.New(context.Background(), fn.Function{Runtime: "go", Name: "f", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullImageName, err := f.ImageName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Image != fullImageName {
+		t.Error("image name was not initially set")
+	}
+
+	// Updating the registry and performing a subsequent update should result
+	// in the image member being updated to the new value.
+	f.Registry = "example.com/alice"
+	if err := client.Deploy(context.Background(), root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reload and check ensures that both the member was updaed and persisted
+	f, err = fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullImageName, err = f.ImageName()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Image != fullImageName {
+		t.Error("image name was not updated on deploy with new registry")
+	}
+
+	// This test of course relies on the implementation of f.ImageName, which
+	// has its own unit tests to ensure it is working properly.
 }
 
 // TestClient_Remove_ByPath ensures that the remover is invoked to remove
@@ -902,32 +981,6 @@ func TestClient_List_OutsideRoot(t *testing.T) {
 
 	if !lister.ListInvoked {
 		t.Fatal("list did not invoke lister implementation")
-	}
-}
-
-// TestClient_Deploy_UnbuiltErrors ensures that a call to deploy a function which was not
-// fully created (ie. was only initialized, not actually built and deploys)
-// yields an expected, and informative, error.
-func TestClient_Deploy_UnbuiltErrors(t *testing.T) {
-	root := "testdata/example.com/testDeployUnbuilt" // Root from which to run the test
-	defer Using(t, root)()
-
-	// New Client
-	client := fn.New(fn.WithRegistry(TestRegistry))
-
-	// Initialize (half-create) a new function at root
-	if err := client.Create(fn.Function{Runtime: TestRuntime, Root: root}); err != nil {
-		t.Fatal(err)
-	}
-
-	// Now try to deploy it.  Ie. without having run the necessary build step.
-	err := client.Deploy(context.Background(), root)
-	if err == nil {
-		t.Fatal("did not receive an error attempting to deploy an unbuilt function")
-	}
-
-	if !errors.Is(err, fn.ErrNotBuilt) {
-		t.Fatalf("did not receive expected error type.  Expected ErrNotBuilt, got %T", err)
 	}
 }
 

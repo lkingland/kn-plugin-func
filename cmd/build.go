@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/terminal"
@@ -83,8 +84,16 @@ func ValidNamespaceAndRegistry(path string) survey.Validator {
 			return errors.New("Value is required")
 		}
 
-		_, err := fn.DerivedImage(path, val.(string)) //image can be derived without any error
+		f, err := fn.NewFunction(path)
+		if err != nil {
+			return fmt.Errorf("error loading funciton at path '%v'. %v", path, err)
+		}
 
+		if val != "" {
+			f.Registry = val.(string)
+		}
+
+		_, err = f.ImageName() //image can be derived without any error
 		if err != nil {
 			return fmt.Errorf("invalid registry [%q]: %w", val.(string), err)
 		}
@@ -93,6 +102,8 @@ func ValidNamespaceAndRegistry(path string) survey.Validator {
 }
 
 func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err error) {
+	// Populate a command config from environment variables, flags and potentially
+	// interactive user prompts if in confirm mode.
 	config, err := newBuildConfig().Prompt()
 	if err != nil {
 		if errors.Is(err, terminal.InterruptErr) {
@@ -101,95 +112,85 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		return
 	}
 
-	function, err := functionWithOverrides(config.Path, functionOverrides{Image: config.Image})
-	if err != nil {
-		return
+	// Load the Function at path, and if it is initialized, update it with
+	// pertinent values from the config.
+	f, err := fn.NewFunction(config.Path)
+	if !f.Initialized() {
+		return fmt.Errorf("the given path '%v' does not contain an initialized function.", config.Path)
 	}
-
-	// Check if the function has been initialized
-	if !function.Initialized() {
-		return fmt.Errorf("the given path '%v' does not contain an initialized function. Please create one at this path before deploying", config.Path)
-	}
-
-	// If a registry name was provided as a command line flag, it should be validated
 	if config.Registry != "" {
-		err = ValidNamespaceAndRegistry(config.Path)(config.Registry)
-		if err != nil {
-			return
-		}
+		f.Registry = config.Registry
+	}
+	if config.Image != "" {
+		f.Image = config.Image
 	}
 
-	// If the function does not yet have an image name and one was not provided on the command line
-	if function.Image == "" {
-		//  AND a --registry was not provided, then we need to
-		// prompt for a registry from which we can derive an image name.
-		if config.Registry == "" {
-			fmt.Println("A registry for function images is required. For example, 'docker.io/tigerteam'.")
-
-			err = survey.AskOne(
-				&survey.Input{Message: "Registry for function images:"},
-				&config.Registry, survey.WithValidator(ValidNamespaceAndRegistry(config.Path)))
-			if err != nil {
-				if errors.Is(err, terminal.InterruptErr) {
-					return nil
-				}
-				return
-			}
-			fmt.Println("Note: building a function the first time will take longer than subsequent builds")
-		}
-
-		// We have the registry, so let's use it to derive the function image name
-		config.Image = deriveImage(config.Image, config.Registry, config.Path)
-		function.Image = config.Image
-	}
-
-	// Choose a builder based on the value of the --builder flag
+	// Choose a builder based on the value of the --builder flag and a possible
+	// override for the build image for that builder to use from the optional
+	// builder-image flag.
 	var builder fn.Builder
-	if function.Builder == "" || cmd.Flags().Changed("builder") {
-		function.Builder = config.Builder
-	} else {
-		config.Builder = function.Builder
-	}
-	if err = fn.ValidateBuilder(config.Builder); err != nil {
-		return err
-	}
-	if config.Builder == fn.BuilderPack {
+	if config.Builder == "pack" {
 		if config.Platform != "" {
-			err = fmt.Errorf("the --platform flag works only with s2i build")
-			return
+			fmt.Fprintln(os.Stderr, "the --platform flag works only with s2i build")
 		}
 		builder = buildpacks.NewBuilder(buildpacks.WithVerbose(config.Verbose))
-	} else if config.Builder == fn.BuilderS2i {
+	} else if config.Builder == "s2i" {
 		builder = s2i.NewBuilder(s2i.WithVerbose(config.Verbose), s2i.WithPlatform(config.Platform))
-	}
-
-	// All set, let's write changes in the config to the disk
-	err = function.Write()
-	if err != nil {
+	} else {
+		err = errors.New("unrecognized builder: valid values are: s2i, pack")
 		return
 	}
-
-	// if registry was not changed via command line flag meaning it's empty
-	// keep the same registry by setting the config.registry to empty otherwise
-	// trust viper to override the env variable with the given flag if both are specified
-	if regFlag, _ := cmd.Flags().GetString("registry"); regFlag == "" {
-		config.Registry = ""
-	}
-
-	// Use the user-provided builder image, if supplied
 	if config.BuilderImage != "" {
-		function.BuilderImages[config.Builder] = config.BuilderImage
+		f.BuilderImages[config.Builder] = config.BuilderImage
 	}
-
-	// Create a client using the registry defined in config plus any additional
-	// options provided (such as mocks for testing)
 	client, done := newClient(ClientConfig{Verbose: config.Verbose},
 		fn.WithRegistry(config.Registry),
 		fn.WithBuilder(builder))
 	defer done()
 
-	err = client.Build(cmd.Context(), config.Path)
-	if err == nil && config.Push {
+	// TODO: confirm this prompt is in .Prompt
+	// If the Function does not yet have an image name and one was not provided on the command line
+	/*
+		if function.Image == "" {
+			//  AND a --registry was not provided, then we need to
+			// prompt for a registry from which we can derive an image name.
+			if config.Registry == "" {
+				fmt.Println("A registry for Function images is required. For example, 'docker.io/tigerteam'.")
+
+				err = survey.AskOne(
+					&survey.Input{Message: "Registry for Function images:"},
+					&config.Registry, survey.WithValidator(ValidNamespaceAndRegistry(config.Path)))
+				if err != nil {
+					if errors.Is(err, terminal.InterruptErr) {
+						return nil
+					}
+					return
+				}
+				fmt.Println("Note: building a Function the first time will take longer than subsequent builds")
+			}
+
+			// We have the registry, so let's use it to derive the Function image name
+			config.Image = deriveImage(config.Image, config.Registry, config.Path)
+			function.Image = config.Image
+		}
+	*/
+
+	// Default Client Registry, Function Registry or explicit Image is required
+	if client.Registry() == "" && f.Registry == "" && f.Image == "" {
+		return ErrRegistryRequired
+	}
+
+	// This preemptive write call will be unnecessary when the API is updated
+	// to use Function instances rather than file paths. For now it must write
+	// even if the command fails later.  Not ideal.
+	if err = f.Write(); err != nil {
+		return
+	}
+
+	if err = client.Build(cmd.Context(), config.Path); err != nil {
+		return
+	}
+	if config.Push {
 		err = client.Push(cmd.Context(), config.Path)
 	}
 	return

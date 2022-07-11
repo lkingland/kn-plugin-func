@@ -273,7 +273,7 @@ func deriveImage(explicitImage, defaultRegistry, path string) string {
 	if f.Image != "" {
 		return f.Image // use value previously provided or derived.
 	}
-	derivedValue, _ := fn.DerivedImage(path, defaultRegistry)
+	derivedValue, _ := f.ImageName()
 	return derivedValue // Use the func system's derivation logic.
 }
 
