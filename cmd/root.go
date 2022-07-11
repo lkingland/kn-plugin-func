@@ -168,38 +168,6 @@ func bindEnv(flags ...string) bindFunc {
 	}
 }
 
-type functionOverrides struct {
-	Image     string
-	Namespace string
-}
-
-// functionWithOverrides sets the namespace and image strings for the
-// function project at root, if provided, and returns the function
-// configuration values.
-// Please note that When this function is called, the overrides are not persisted.
-func functionWithOverrides(root string, overrides functionOverrides) (f fn.Function, err error) {
-	f, err = fn.NewFunction(root)
-	if err != nil {
-		return
-	}
-
-	overrideMapping := []struct {
-		src  string
-		dest *string
-	}{
-		{overrides.Image, &f.Image},
-		{overrides.Namespace, &f.Namespace},
-	}
-
-	for _, m := range overrideMapping {
-		if m.src != "" {
-			*m.dest = m.src
-		}
-	}
-
-	return
-}
-
 // deriveName returns the explicit value (if provided) or attempts to derive
 // from the given path.  Path is defaulted to current working directory, where
 // a function configuration, if it exists and contains a name, is used.

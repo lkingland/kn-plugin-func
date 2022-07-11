@@ -577,9 +577,9 @@ func TestClient_Run_DataDir(t *testing.T) {
 	t.Errorf(".gitignore does not include '/%v' ignore directive", fn.RunDataDir)
 }
 
-// TestClient_Deploy ensures that the deployer properly invokes the build/push/deploy
+// TestClient_Update ensures that updating invokes the build/push/deploy
 // process, erroring if run on a directory uncreated.
-func TestClient_Deploy(t *testing.T) {
+func TestClient_Update(t *testing.T) {
 	var (
 		root          = "testdata/example.com/testUpdate"
 		expectedName  = "testUpdate"
