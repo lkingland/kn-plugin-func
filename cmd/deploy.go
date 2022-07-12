@@ -143,7 +143,7 @@ EXAMPLES
 	return cmd
 }
 
-// runDeploy gathers configuraiton from environment, flags and the user,
+// runDeploy gathers configuration from environment, flags and the user,
 // merges these into the Function requested, and triggers either a remote or
 // local build-and-deploy.
 func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err error) {
@@ -206,28 +206,6 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		return
 	}
 
-	function.Envs, _, err = mergeEnvs(function.Envs, config.EnvToUpdate, config.EnvToRemove)
-	if err != nil {
-		return
-	}
-
-	currentBuildType := config.BuildType
-
-	// if build type has been explicitly set as flag, validate it and override function config
-	if config.BuildType != "" {
-		err = validateBuildType(config.BuildType)
-		if err != nil {
-			return err
-		}
-	} else {
-		currentBuildType = function.BuildType
-	}
-
-	// Check if the function has been initialized
-	if !function.Initialized() {
-		return fmt.Errorf("the given path '%v' does not contain an initialized function. Please create one at this path before deploying", config.Path)
-	}
-
 	// Choose a builder based on the value of the --builder flag and a possible
 	// override for the build image for that builder to use from the optional
 	// builder-image flag.
@@ -262,7 +240,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		return ErrRegistryRequired
 	}
 
-	// NOTE: curently need to preemptively write out Funciton state until
+	// NOTE: curently need to preemptively write out Function state until
 	// the API is updated to use instances.
 	//
 	// Discussion:  The need for this is proof that the Client API should work on
@@ -273,7 +251,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 	// completion.. i.e. we have to save to communicate the Functin state to the
 	// builder, potentially prematurely.  Therefore, in the forthcoming PR which
 	// persists all flags to func.yaml by default (option to --save=false), the
-	// Client API will need to change to accepting Funciton instances rather than
+	// Client API will need to change to accepting Function instances rather than
 	// paths on disk.  This has other knock-on benefits as well.
 	if err = f.Write(); err != nil {
 		return
@@ -309,7 +287,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 			f.Git.ContextDir = config.GitDir
 		}
 
-		// Validate the Funciton contains a URL.
+		// Validate the Function contains a URL.
 		// TODO: This should be a check performed by the Pipeline Runner as well,
 		// but by checking here, we can provide a verbose error message with cli-
 		// specific recommendations.  We could refactor such that the Pipeline
@@ -367,7 +345,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 	// Config has been gathered from the environment, from the user and merged
 	// into the in-memory Function.  It has potentially also been built, and
 	// the remote or local deploy succeeded with those settings.  All of
-	// which result in a Funciton object which is now out of sync with its
+	// which result in a Function object which is now out of sync with its
 	// on-disk representation.
 	return f.Write()
 }
@@ -632,11 +610,6 @@ func parseImageDigest(imageSplit []string, config deployConfig, cmd *cobra.Comma
 
 	if len(imageSplit[1][7:]) != 64 {
 		return config, fmt.Errorf("sha256 hash in '%s' from --image has the wrong length (%d), should be 64", imageSplit[1], len(imageSplit[1][7:]))
-	}
-
-	// if --build was set but not as 'disabled', return an error
-	if cmd.Flags().Changed("build") && config.BuildType != "disabled" {
-		return config, fmt.Errorf("the --build flag '%s' is not valid when using --image with digest", config.BuildType)
 	}
 
 	// if the --push flag was set by a user to 'true', return an error

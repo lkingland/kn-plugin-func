@@ -59,10 +59,6 @@ and the image name is stored in the configuration file.
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
 	setPathFlag(cmd)
 
-	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildersList); err != nil {
-		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
-	}
-
 	if err := cmd.RegisterFlagCompletionFunc("builder-image", CompleteBuilderImageList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
@@ -86,7 +82,7 @@ func ValidNamespaceAndRegistry(path string) survey.Validator {
 
 		f, err := fn.NewFunction(path)
 		if err != nil {
-			return fmt.Errorf("error loading funciton at path '%v'. %v", path, err)
+			return fmt.Errorf("error loading Function at path '%v'. %v", path, err)
 		}
 
 		if val != "" {

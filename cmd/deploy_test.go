@@ -16,7 +16,7 @@ import (
 const TestRegistry = "example.com/alice"
 
 // TestDeploy_Default ensures that running deploy on a valid default Function
-// (only required options populated; all else deafult) completes successfully.
+// (only required options populated; all else default) completes successfully.
 func TestDeploy_Default(t *testing.T) {
 	root, rm := Mktemp(t)
 	defer rm()
@@ -93,7 +93,7 @@ func TestDeploy_ImageAndRegistry(t *testing.T) {
 	)
 
 	// If only --registry is provided:
-	// the resultant Function should have the regsitry populated and image
+	// the resultant Function should have the registry populated and image
 	// derived from the name.
 	cmd.SetArgs([]string{"--registry=example.com/alice"})
 	deployer.DeployFn = func(f fn.Function) error {
@@ -130,7 +130,7 @@ func TestDeploy_ImageAndRegistry(t *testing.T) {
 			t.Fatal("registry flag value not seen on the Function by the deployer")
 		}
 		if f.Image != "example.com/alice/subnamespace/myfunc" {
-			t.Fatal("image flag value not seen on the Funciton by deployer")
+			t.Fatal("image flag value not seen on the Function by deployer")
 		}
 		return nil
 	}
@@ -171,7 +171,7 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 			root, rm := Mktemp(t)
 			defer rm()
 
-			// Create a new Funciton in the temp directory
+			// Create a new Function in the temp directory
 			if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
 				t.Fatal(err)
 			}
