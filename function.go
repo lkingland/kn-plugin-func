@@ -385,7 +385,7 @@ func assertEmptyRoot(path string) (err error) {
 	if err != nil {
 		return
 	} else if !empty {
-		err = errors.New("the directory must be empty of visible files and recognized config files before it can be initialized")
+		err = errors.New(fmt.Sprintf("the directory '%v' must be empty of visible files and recognized config files before it can be initialized", path))
 		return
 	}
 	return

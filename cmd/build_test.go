@@ -156,7 +156,7 @@ created: 2009-11-10 23:00:00`,
 
 func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(ClientFactory) *cobra.Command) {
 	//add this to work with all other tests in deploy_test.go
-	defer WithEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))()
+	t.Setenv("KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))
 
 	root, rm := Mktemp(t)
 	defer rm()
@@ -197,8 +197,9 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 		t.Fatal(err)
 	}
 	if f.Builder != "s2i" {
-		t.Fatal("value of builder flag not persisted when provided")
+		t.Fatalf("value of builder flag not persisted when provided. expected 's2i' got '%v'", f.Builder)
 	}
+
 	// Build the function without specifying a Builder
 	cmd = cmdBuilder(NewClientFactory(func() *fn.Client {
 		return client
@@ -234,13 +235,13 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 	// Build the function, specifying a platform with "pack" Builder
 	cmd.SetArgs([]string{"--platform", "linux"})
 	if err := cmd.Execute(); err == nil {
-		t.Fatal("Expected error")
+		t.Fatal("Expected error using --platform without s2i builder was not received")
 	}
 
 	// Set an invalid builder
 	cmd.SetArgs([]string{"--builder", "invalid"})
 	if err := cmd.Execute(); err == nil {
-		t.Fatal("Expected error")
+		t.Fatal("Expected error using an invalid --builder not received")
 	}
 }
 

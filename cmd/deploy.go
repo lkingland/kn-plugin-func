@@ -193,9 +193,6 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		f.Builder = config.Builder
 	}
 	f.Namespace = checkNamespaceDeploy(f, config, cmd.ErrOrStderr())
-	if err != nil {
-		return
-	}
 	f.Envs, _, err = mergeEnvs(f.Envs, config.EnvToUpdate, config.EnvToRemove)
 	if err != nil {
 		return

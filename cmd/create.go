@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -13,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	fn "knative.dev/kn-plugin-func"
+	"knative.dev/kn-plugin-func/config"
 	"knative.dev/kn-plugin-func/utils"
 )
 
@@ -74,8 +76,20 @@ EXAMPLES
 		PreRunE:    bindEnv("language", "template", "repository", "confirm"),
 	}
 
+	// Load Config
+	configFilename := filepath.Join(config.Path(), config.Filename)
+	cfg, err := config.Load(configFilename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(cmd.OutOrStdout(), "Global config file not found: skipping.\n")
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "unable to load config '%v'. %v\n",
+				configFilename, err)
+		}
+	}
+
 	// Flags
-	cmd.Flags().StringP("language", "l", "", "Language Runtime (see help text for list) (Env: $FUNC_LANGUAGE)")
+	cmd.Flags().StringP("language", "l", cfg.Language, "Language Runtime (see help text for list) (Env: $FUNC_LANGUAGE)")
 	cmd.Flags().StringP("template", "t", fn.DefaultTemplate, "Function template. (see help text for list) (Env: $FUNC_TEMPLATE)")
 	cmd.Flags().StringP("repository", "r", "", "URI to a Git repository containing the specified template (Env: $FUNC_REPOSITORY)")
 	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all options interactively (Env: $FUNC_CONFIRM)")
