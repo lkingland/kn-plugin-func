@@ -337,7 +337,7 @@ func Test_ImageWithDigestErrors(t *testing.T) {
 		},
 	}
 
-	t.Setenv("KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))
+	defer WithEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
