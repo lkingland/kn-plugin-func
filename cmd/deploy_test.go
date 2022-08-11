@@ -297,97 +297,91 @@ func TestDeploy_RemoteBuildURLPermutations(t *testing.T) {
 	}
 }
 
-func Test_imageWithDigest(t *testing.T) {
-	// TODO(lkingland): this test relies on a side-effect of the client library
-	// dependency:  the format and even existence of the func.yaml.  Since this
-	// is the CLI package (cmd), This test would be more correct if refactored to
-	// instantiate a command struct and invoke it using explicit argments (see
-	// other tests this file).
+// Test_ImageWithDigestErrors ensures that when an image to use is explicitly
+// provided via content addressing (digest), nonsensical combinations
+// of other flags (such as forcing a build or pushing being enabled), yield
+// informative errors.
+func Test_ImageWithDigestErrors(t *testing.T) {
 	tests := []struct {
-		name      string
-		image     string
-		buildType string
-		pushBool  bool
-		funcFile  string
-		errString string
+		name      string // name of the test
+		image     string // value to provide as --image
+		build     string // If provided, the value of the build flag
+		push      bool   // if true, explicitly set argument --push=true
+		errString string // the string value of an expected error
 	}{
 		{
-			name:      "valid full name with digest, expect success",
-			image:     "docker.io/4141gauron3268/static_test_digest:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
-			errString: "",
-			funcFile: `name: test-func
-runtime: go`,
+			name:  "correctly formatted full image with digest yields no error (degen case)",
+			image: "example.com/myNamespace/myFunction:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
 		},
 		{
-			name:      "valid image name, build not 'disabled', expect error",
-			image:     "docker.io/4141gauron3268/static_test_digest:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
-			buildType: "local",
-			errString: "the --build flag 'local' is not valid when using --image with digest",
-			funcFile: `name: test-func
-runtime: go`,
+			name:      "--build forced on yields error",
+			image:     "example.com/myNamespace/myFunction:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
+			build:     "true",
+			errString: "when an image digest is provided, --build can not also be enabled",
 		},
 		{
-			name:      "valid image name, --push specified, expect error",
-			image:     "docker.io/4141gauron3268/static_test_digest:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
-			pushBool:  true,
+			name:      "push flag is ignored if provided",
+			image:     "example.com/myNamespace/myFunction:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
+			push:      true,
 			errString: "the --push flag 'true' is not valid when using --image with digest",
-			funcFile: `name: test-func
-runtime: go`,
 		},
 		{
-			name:      "invalid digest prefix, expect error",
-			image:     "docker.io/4141gauron3268/static_test_digest:latest@Xsha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
-			errString: "value 'docker.io/4141gauron3268/static_test_digest:latest@Xsha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e' in --image has invalid prefix syntax for digest (should be 'sha256:')",
-			funcFile: `name: test-func
-runtime: go`,
+			name:      "invalid digest prefix 'Xsha256', expect error",
+			image:     "example.com/myNamespace/myFunction:latest@Xsha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e",
+			errString: "value 'example.com/myNamespace/myFunction:latest@Xsha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4e' in --image has invalid prefix syntax for digest (should be 'sha256:')",
 		},
 		{
 			name:      "invalid sha hash length(added X at the end), expect error",
-			image:     "docker.io/4141gauron3268/static_test_digest:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4eX",
+			image:     "example.com/myNamespace/myFunction:latest@sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4eX",
 			errString: "sha256 hash in 'sha256:7d66645b0add6de7af77ef332ecd4728649a2f03b9a2716422a054805b595c4eX' from --image has the wrong length (65), should be 64",
-			funcFile: `name: test-func
-runtime: go`,
 		},
 	}
 
-	defer WithEnvVar(t, "KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))()
+	t.Setenv("KUBECONFIG", fmt.Sprintf("%s/testdata/kubeconfig_deploy_namespace", cwd()))
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			deployer := mock.NewDeployer()
-			cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-				return fn.New(
-					fn.WithDeployer(deployer))
-			}))
+			// Move into a new temp directory
+			root, rm := Mktemp(t)
+			defer rm()
 
-			// Set flags manually & reset after.
-			// Differs whether build was set via CLI (gives an error if not 'disabled')
-			// or not (prints just a warning)
-			if tt.buildType == "" {
-				cmd.SetArgs([]string{
-					fmt.Sprintf("--image=%s", tt.image),
-					fmt.Sprintf("--push=%t", tt.pushBool),
-				})
-			} else {
-				cmd.SetArgs([]string{
-					fmt.Sprintf("--image=%s", tt.image),
-					fmt.Sprintf("--build=%s", tt.buildType),
-					fmt.Sprintf("--push=%t", tt.pushBool),
-				})
-			}
-			defer cmd.ResetFlags()
-
-			// set test case's func.yaml
-			if err := os.WriteFile("func.yaml", []byte(tt.funcFile), os.ModePerm); err != nil {
+			// Create a new Function in the temp directory
+			if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
 				t.Fatal(err)
 			}
 
-			ctx := context.Background()
+			// Deploy it using the various combinations of flags from the test
+			var (
+				deployer  = mock.NewDeployer()
+				builder   = mock.NewBuilder()
+				pipeliner = mock.NewPipelinesProvider()
+				cmd       = NewDeployCmd(NewClientFactory(func() *fn.Client {
+					return fn.New(
+						fn.WithDeployer(deployer),
+						fn.WithBuilder(builder),
+						fn.WithPipelinesProvider(pipeliner),
+						fn.WithRegistry(TestRegistry),
+					)
+				}))
+			)
+			args := []string{fmt.Sprintf("--image=%s", tt.image)}
+			if tt.build != "" {
+				args = append(args, fmt.Sprintf("--build=%s", tt.build))
+			}
+			if tt.push {
+				args = append(args, "--push=true")
+			}
 
-			_, err := cmd.ExecuteContextC(ctx)
+			cmd.SetArgs(args)
+			err := cmd.Execute()
 			if err != nil {
-				if err := err.Error(); tt.errString != err {
-					t.Fatalf("Error expected to be (%v) but was (%v)", tt.errString, err)
+				if tt.errString == "" {
+					t.Fatal(err) // no error was expected.  fail
 				}
+				if tt.errString != err.Error() {
+					t.Fatalf("expected error '%v' not received. got '%v'", tt.errString, err.Error())
+				}
+				// There was an error, but it was expected
 			}
 		})
 	}
