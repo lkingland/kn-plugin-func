@@ -178,9 +178,8 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 	if f, err = fn.NewFunction(root); err != nil {
 		t.Fatal(err)
 	}
-
-	if f.Builder != "s2i" {
-		t.Fatal("value of builder updated when not provided")
+	if f.Builder != fn.DefaultBuilder {
+		t.Fatal("value of builder updated to default when not provided")
 	}
 
 	// Build the function again using a different builder
