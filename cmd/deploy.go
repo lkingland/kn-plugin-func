@@ -188,6 +188,9 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 	if config.Image != "" {
 		f.Image = config.Image
 	}
+	if config.Builder != "" {
+		f.Builder = config.Builder
+	}
 	if config.Namespace != "" {
 		f.Namespace = config.Namespace
 	}

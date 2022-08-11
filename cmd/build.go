@@ -120,6 +120,9 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	if config.Image != "" {
 		f.Image = config.Image
 	}
+	if config.Builder != "" {
+		f.Builder = config.Builder
+	}
 
 	// Choose a builder based on the value of the --builder flag and a possible
 	// override for the build image for that builder to use from the optional
