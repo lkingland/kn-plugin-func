@@ -161,7 +161,7 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 	if f, err = fn.NewFunction(root); err != nil {
 		t.Fatal(err)
 	}
-	if f.Builder != "s2i" {
+	if f.Builder != BuilderS2I {
 		t.Fatal("value of builder flag not persisted when provided")
 	}
 	// Build the function without specifying a Builder
@@ -178,7 +178,7 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 	if f, err = fn.NewFunction(root); err != nil {
 		t.Fatal(err)
 	}
-	if f.Builder != fn.DefaultBuilder {
+	if f.Builder != "pack" {
 		t.Fatal("value of builder updated to default when not provided")
 	}
 

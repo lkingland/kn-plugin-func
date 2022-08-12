@@ -49,7 +49,7 @@ and the image name is stored in the configuration file.
 		PreRunE:    bindEnv("image", "path", "builder", "registry", "confirm", "push", "builder-image", "platform"),
 	}
 
-	cmd.Flags().StringP("builder", "b", fn.DefaultBuilder, fmt.Sprintf("build strategy to use when creating the underlying image. Currently supported build strategies are %s.", fn.SupportedBuilders()))
+	cmd.Flags().StringP("builder", "b", DefaultBuilder, "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' or 's2i'.")
 	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
 	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all configuration options (Env: $FUNC_CONFIRM)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag] (optional). This option takes precedence over --registry (Env: $FUNC_IMAGE)")

@@ -118,7 +118,7 @@ EXAMPLES
 	// Flags shared with Build specifically related to building:
 	cmd.Flags().StringP("build", "b", "auto", "Build the function. [auto|true|false]. [Env: $FUNC_BUILD]")
 	cmd.Flags().Lookup("build").NoOptDefVal = "true" // --build is equivalient to --build=true
-	cmd.Flags().StringP("builder", "", "pack", "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' and 's2i'. [Env: $FUNC_BUILDER]")
+	cmd.Flags().StringP("builder", "", DefaultBuilder, "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' and 's2i'. [Env: $FUNC_BUILDER]")
 	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)")
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")

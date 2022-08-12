@@ -14,6 +14,11 @@ import (
 	fn "knative.dev/kn-plugin-func"
 )
 
+const (
+	// DefaultBuilder for commands sucn as build and deploy.
+	DefaultBuilder = "pack"
+)
+
 type RootCommandConfig struct {
 	Name string // usually `func` or `kn func`
 	Version
