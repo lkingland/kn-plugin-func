@@ -408,7 +408,7 @@ Test_namespaceCheck cases were refactored into:
 			  and yields a warning message.
 
 			"ns in func.yaml, not given via cli, current ns does NOT match func.yaml",
-			AKA: A previously deployed funciton should stay in its namespace, even
+			AKA: A previously deployed function should stay in its namespace, even
 			  when the user's active namespace differs.
 			See TestDeploy_NamespaceRedeployWarning which confirms this case exists
 			  and yields a warning message.
@@ -666,7 +666,7 @@ func TestDeploy_NamespaceRedeployWarning(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Redeploy the funciton without specifying namespace.
+	// Redeploy the function without specifying namespace.
 	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
 		return fn.New(
 			fn.WithDeployer(mock.NewDeployer()),
