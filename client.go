@@ -525,7 +525,7 @@ func (c *Client) Create(cfg Function) (err error) {
 		return err
 	}
 	if hasFunc {
-		return fmt.Errorf("Function at '%v' already initialized", cfg.Root)
+		return fmt.Errorf("function at '%v' already initialized", cfg.Root)
 	}
 
 	// Path is defaulted to the current working directory
@@ -724,7 +724,7 @@ func (c *Client) Deploy(ctx context.Context, path string) (err error) {
 	return err
 }
 
-// RunPipeline runs a Pipeline to build and deploy the Function.
+// RunPipeline runs a Pipeline to build and deploy the function.
 func (c *Client) RunPipeline(ctx context.Context, f Function) (err error) {
 	go func() {
 		<-ctx.Done()
@@ -824,7 +824,7 @@ func (c *Client) Remove(ctx context.Context, cfg Function, deleteAll bool) error
 			return err
 		}
 		if !f.Initialized() {
-			return fmt.Errorf("Function at %v can not be removed unless initialized. Try removing by name", f.Root)
+			return fmt.Errorf("function at %v can not be removed unless initialized. Try removing by name", f.Root)
 		}
 		functionName = f.Name
 		cfg = f
