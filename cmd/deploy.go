@@ -41,17 +41,17 @@ SYNOPSIS
 
 DESCRIPTION
 	
-	Deploys a Function to the currently configured Knative-enabled cluster.
+	Deploys a function to the currently configured Knative-enabled cluster.
 
-	By default the Function in the current working directory is deployed, or at
+	By default the function in the current working directory is deployed, or at
 	the path defined by --path.
 
-	A Function which was previously deployed will be updated when re-deployed.
+	A function which was previously deployed will be updated when re-deployed.
 
-	The Function is built into a container for transport to the destination
+	The function is built into a container for transport to the destination
 	cluster by way of a registry.  Therefore --registry must be provided or have
-	previously been configured for the Function. This registry is also used to
-	determine the final built image tag for the Function.  This final image name
+	previously been configured for the function. This registry is also used to
+	determine the final built image tag for the function.  This final image name
 	can be provided explicitly using --image, in which case it is used in place
 	of --registry.
 	
@@ -60,33 +60,33 @@ DESCRIPTION
 	deployments remember most of the settings provided.
 
 	Building
-	  By default the Function will be built if it has not yet been built, or if
-	  changes are detected in the Function's source.  The --build flag can be
+	  By default the function will be built if it has not yet been built, or if
+	  changes are detected in the function's source.  The --build flag can be
 	  used to override this behavior and force building either on or off.
 
 	Remote
 	  Building and deploying is by default executed on the current host.  This
 	  process can also be triggered to run remotely in a Tekton-enabled cluster.
 	  The --remote flag indicates that a build and deploy pipeline should be
-	  invoked in the remote.  Functions deployed in this manner must have their
+	  invoked in the remote.  functions deployed in this manner must have their
 	  source code kept in a git repository, and the URL to this source provided
 	  via --git-url.  A specific branch can be specified with --git-branch.
 
 EXAMPLES
 
-	o Deploy the Function using interactive prompts. This is useful for the first
+	o Deploy the function using interactive prompts. This is useful for the first
 	  deployment, since most settings will be remembered for future deployments.
 	  $ {{.Name}} deploy -c
 
-	o Deploy the Function in the current working directory.
-	  The Function image will be pushed to "quay.io/alice/<Function Name>"
+	o Deploy the function in the current working directory.
+	  The function image will be pushed to "quay.io/alice/<Function Name>"
 	  $ {{.Name}} deploy --registry quay.io/alice
 
-	o Deploy the Function in the current working directory, manually specifying
+	o Deploy the function in the current working directory, manually specifying
 	  the final image name and target cluster namespace.
 	  $ {{.Name}} deploy --image quay.io/alice/myfunc --namespace myns
 
-	o Deploy the Function, rebuilding the image even if no changes have been
+	o Deploy the function, rebuilding the image even if no changes have been
 	  detected in the local filesystem (source).
 	  $ {{.Name}} deploy --build
 
@@ -95,7 +95,7 @@ EXAMPLES
 	  $ {{.Name}} deploy --build=false
 
 	o Trigger a remote deploy, which instructs the cluster to build build and
-	  deploy the Function in the specified git repository.
+	  deploy the function in the specified git repository.
 	  $ {{.Name}} deploy --remote --git-url=https://example.com/alice/myfunc.git
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
@@ -108,7 +108,7 @@ EXAMPLES
 		"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
 	cmd.Flags().StringP("git-url", "g", "", "Repo url to push the code to be built (Env: $FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", "", "Git branch to be used for remote builds (Env: $FUNC_GIT_BRANCH)")
-	cmd.Flags().StringP("git-dir", "d", "", "Directory in the repo where the Function is located (Env: $FUNC_GIT_DIR)")
+	cmd.Flags().StringP("git-dir", "d", "", "Directory in the repo where the function is located (Env: $FUNC_GIT_DIR)")
 
 	// Remote indicates whether the deployment process (including potentially
 	// building as well) is being performed locally (default) or by triggering
@@ -116,13 +116,13 @@ EXAMPLES
 	cmd.Flags().BoolP("remote", "", false, "Trigger a remote deployment.  Default is to deploy and build from the local system: $FUNC_REMOTE)")
 
 	// Flags shared with Build specifically related to building:
-	cmd.Flags().StringP("build", "b", "auto", "Build the Function. [auto|true|false]. [Env: $FUNC_BUILD]")
+	cmd.Flags().StringP("build", "b", "auto", "Build the function. [auto|true|false]. [Env: $FUNC_BUILD]")
 	cmd.Flags().Lookup("build").NoOptDefVal = "true" // --build is equivalient to --build=true
 	cmd.Flags().StringP("builder", "", "pack", "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' and 's2i'. [Env: $FUNC_BUILDER]")
 	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)")
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")
-	cmd.Flags().BoolP("push", "u", true, "Push the Function image to registry before deploying (Env: $FUNC_PUSH)")
+	cmd.Flags().BoolP("push", "u", true, "Push the function image to registry before deploying (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
 	cmd.Flags().StringP("namespace", "n", "", "deploy into a specific namespace. (Env: $FUNC_NAMESPACE)")
 	setPathFlag(cmd)
@@ -145,7 +145,7 @@ EXAMPLES
 }
 
 // runDeploy gathers configuration from environment, flags and the user,
-// merges these into the Function requested, and triggers either a remote or
+// merges these into the function requested, and triggers either a remote or
 // local build-and-deploy.
 func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err error) {
 	// Create a deploy config from environment variables and flags
@@ -174,7 +174,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		imageDigestProvided = true
 	}
 
-	// Load the Function, and if it exists (path initialized as a Function), merge
+	// Load the function, and if it exists (path initialized as a function), merge
 	// in any updates from flags/env vars (namespace, explicit image name, envs).
 	f, err := fn.NewFunction(config.Path)
 	if err != nil {
@@ -211,7 +211,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 			f.Namespace = knative.DefaultNamespace()
 		}
 
-		// Warn if the Function does include a destination namespace already, and
+		// Warn if the function does include a destination namespace already, and
 		// this namespace differs from the user's current namespace (the k8s
 		// default namespace), this also results in a warning. becaus it ma appear
 		// to the user nothing happened.
@@ -265,18 +265,18 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		return ErrRegistryRequired
 	}
 
-	// NOTE: curently need to preemptively write out Function state until
+	// NOTE: curently need to preemptively write out function state until
 	// the API is updated to use instances.
 	//
 	// Discussion:  The need for this is proof that the Client API should work on
-	// Function instances as opposed to paths.  In order for the following Build
-	// call to complete using flag values from above, the Function hast to be
+	// function instances as opposed to paths.  In order for the following Build
+	// call to complete using flag values from above, the function hast to be
 	// first serialized out to disk.  This interferes with the ability to have a
 	// --save option which only writes mutated values to disk on a successful
 	// completion.. i.e. we have to save to communicate the Functin state to the
 	// builder, potentially prematurely.  Therefore, in the forthcoming PR which
 	// persists all flags to func.yaml by default (option to --save=false), the
-	// Client API will need to change to accepting Function instances rather than
+	// Client API will need to change to accepting function instances rather than
 	// paths on disk.  This has other knock-on benefits as well.
 	if err = f.Write(); err != nil {
 		return
@@ -340,7 +340,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 					return
 				}
 			} else {
-				fmt.Println("Function already built.  Use --build to force a rebuild.")
+				fmt.Println("function already built.  Use --build to force a rebuild.")
 			}
 		} else {
 			var build bool
@@ -352,25 +352,25 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 					return
 				}
 			} else {
-				fmt.Println("Function build disabled.")
+				fmt.Println("function build disabled.")
 			}
 		}
-		// Push built image for the Function at path to registry
+		// Push built image for the function at path to registry
 		if config.Push {
 			if err = client.Push(cmd.Context(), config.Path); err != nil {
 				return
 			}
 		}
-		// Deploy pushed image for Function at path to current platform
+		// Deploy pushed image for function at path to current platform
 		if err = client.Deploy(cmd.Context(), config.Path); err != nil {
 			return
 		}
 	}
 
 	// Config has been gathered from the environment, from the user and merged
-	// into the in-memory Function.  It has potentially also been built, and
+	// into the in-memory function.  It has potentially also been built, and
 	// the remote or local deploy succeeded with those settings.  All of
-	// which result in a Function object which is now out of sync with its
+	// which result in a function object which is now out of sync with its
 	// on-disk representation.
 	return f.Write()
 }
@@ -660,7 +660,7 @@ For more advanced usage, it is also possible to specify the exact image to use. 
 
 To run the deploy command in an interactive mode, use --confirm (-c)`)
 
-var ErrURLRequired = errors.New(`The Function is not associated with a Git repository, and needs one in order to perform a remote deployment.  For example:
+var ErrURLRequired = errors.New(`The function is not associated with a Git repository, and needs one in order to perform a remote deployment.  For example:
 
 --git-url = https://git.example.com/namespace/myFunction
 
