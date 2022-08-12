@@ -127,6 +127,10 @@ EXAMPLES
 	cmd.Flags().StringP("namespace", "n", "", "deploy into a specific namespace. (Env: $FUNC_NAMESPACE)")
 	setPathFlag(cmd)
 
+	if err := cmd.RegisterFlagCompletionFunc("build", CompleteBuildList); err != nil {
+		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
+	}
+
 	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildStrategyList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
