@@ -196,33 +196,9 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 	if config.Builder != "" {
 		f.Builder = config.Builder
 	}
-	if config.Namespace != "" {
-		// If updating a function which is alredy presumably deployed (has the
-		// namespace member populated), that if we are requesting it be deployed
-		// to a different namespace, this results in an warning because it may
-		// result in an orphaned instance in another namespace.
-		if f.Namespace != "" && config.Namespace != f.Namespace {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Function is in namespace '%v', but requested namespace is '%v'. Continuing with deployment to '%v'.\n", f.Namespace, config.Namespace, config.Namespace)
-		}
-		f.Namespace = config.Namespace
-	} else {
-		// a new namespace was _not_ provided
-
-		// Default
-		if f.Namespace == "" && knative.DefaultNamespace() != "" {
-			// printing info only if default returned is nonempty
-			fmt.Fprintf(cmd.OutOrStdout(), "Using default namespace %v\n", knative.DefaultNamespace())
-			f.Namespace = knative.DefaultNamespace()
-		}
-
-		// Warn if the function does include a destination namespace already, and
-		// this namespace differs from the user's current namespace (the k8s
-		// default namespace), this also results in a warning. becaus it ma appear
-		// to the user nothing happened.
-		if f.Namespace != "" && f.Namespace != knative.DefaultNamespace() {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Function is in namespace '%v', but currently active namespace is '%v'. Continuing with redeployment to '%v'.\n", f.Namespace, knative.DefaultNamespace(), f.Namespace)
-
-		}
+	f.Namespace = checkNamespaceDeploy(f, config, cmd.ErrOrStderr())
+	if err != nil {
+		return
 	}
 	f.Envs, _, err = mergeEnvs(f.Envs, config.EnvToUpdate, config.EnvToRemove)
 	if err != nil {
@@ -652,6 +628,39 @@ func parseImageDigest(imageSplit []string, config deployConfig, cmd *cobra.Comma
 	config.Image = imageSplit[0]
 
 	return config, nil
+}
+
+// checkNamespaceDeploy returns the namespace that should be
+// effective given the current value and a given requested.
+func checkNamespaceDeploy(f fn.Function, config deployConfig, out io.Writer) string {
+	// --namespace provided
+	if config.Namespace != "" {
+		// If updating a function which is alredy presumably deployed (has the
+		// namespace member populated), that if we are requesting it be deployed
+		// to a different namespace, this results in an warning because it may
+		// result in an orphaned instance in another namespace.
+		if f.Namespace != "" && config.Namespace != f.Namespace {
+			fmt.Fprintf(out, "Warning: Function is in namespace '%v', but requested namespace is '%v'. Continuing with deployment to '%v'.\n", f.Namespace, config.Namespace, config.Namespace)
+		}
+		return config.Namespace
+	}
+
+	// Default when no --namespace provided and function undeployed
+	if f.Namespace == "" && knative.DefaultNamespace() != "" {
+		// printing info only if default returned is nonempty
+		fmt.Fprintf(out, "Using default namespace %v\n", knative.DefaultNamespace())
+		return knative.DefaultNamespace()
+	}
+
+	// Warn if the function does include a destination namespace already, and
+	// this namespace differs from the user's current namespace (the k8s
+	// default namespace), this also results in a warning. becaus it ma appear
+	// to the user nothing happened.
+	if f.Namespace != "" && f.Namespace != knative.DefaultNamespace() {
+		fmt.Fprintf(out, "Warning: Function is in namespace '%v', but currently active namespace is '%v'. Continuing with redeployment to '%v'.\n", f.Namespace, knative.DefaultNamespace(), f.Namespace)
+
+	}
+	return f.Namespace // None of the aboive conditions apply.  Leave it unchanged.
 }
 
 var ErrRegistryRequired = errors.New(`A container registry is required.  For example:
