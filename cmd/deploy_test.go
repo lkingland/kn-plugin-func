@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ory/viper"
@@ -582,7 +584,11 @@ func TestDeploy_GitURLBranch(t *testing.T) {
 		expectedBranch = "branch"
 	)
 	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
-		return fn.New(fn.WithPipelinesProvider(mock.NewPipelinesProvider()), fn.WithRegistry(TestRegistry))
+		return fn.New(
+			fn.WithDeployer(mock.NewDeployer()),
+			fn.WithBuilder(mock.NewBuilder()),
+			fn.WithPipelinesProvider(mock.NewPipelinesProvider()),
+			fn.WithRegistry(TestRegistry))
 	}))
 	cmd.SetArgs([]string{"--remote", "--git-url=" + url})
 
@@ -602,7 +608,155 @@ func TestDeploy_GitURLBranch(t *testing.T) {
 	}
 }
 
-// TODO: Test that an error is generated if --git-url includes a branch and
-// --git-branch is provided.
+// TestDeploy_NamespaceDefaults ensures that when not specified, a users's
+// active kubernetes context is used for the namespace if available.
+func TestDeploy_NamespaceDefaults(t *testing.T) {
+	// Set kube context to test context
+	defer WithEnvVar(t, "KUBECONFIG", filepath.Join(cwd(), "testdata", "kubeconfig_deploy_namespace"))()
 
-// TODO:  --save
+	// from a temp directory
+	root, rm := Mktemp(t)
+	defer rm()
+
+	// Create a new function
+	if err := fn.New().Create(fn.Function{Runtime: "go", Root: root}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert it has no default namespace set
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatalf("newly created functions should not have a namespace set until deployed.  Got '%v'", f.Namespace)
+	}
+
+	// New deploy command that will not actually deploy or build (mocked)
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(
+			fn.WithDeployer(mock.NewDeployer()),
+			fn.WithBuilder(mock.NewBuilder()),
+			fn.WithPipelinesProvider(mock.NewPipelinesProvider()),
+			fn.WithRegistry(TestRegistry))
+	}))
+	cmd.SetArgs([]string{})
+
+	// Execute, capturing stderr
+	stderr := strings.Builder{}
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert the function has been updated to be in namespace from the profile
+	f, err = fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Namespace != "test-ns-deploy" { // from testdata/kubeconfig_deploy_namespace
+		t.Fatalf("expected function to have active namespace 'test-ns-deploy' by default.  got '%v'", f.Namespace)
+	}
+	// See the knative package's tests for an example of tests which require
+	// the knative or kubernetes API dependency.
+}
+
+// TestDeploy_NamespaceUpdateWarning ensures that, deploying a Function
+// to a new namespace issues a warning.
+func TestDeploy_NamespaceUpdateWarning(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	// Create a Function which appears to have been deployed to 'myns'
+	f := fn.Function{
+		Runtime:   "go",
+		Root:      root,
+		Namespace: "myns",
+	}
+	if err := fn.New().Create(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Redeploy the function, specifying 'newns'
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(
+			fn.WithDeployer(mock.NewDeployer()),
+			fn.WithBuilder(mock.NewBuilder()),
+			fn.WithPipelinesProvider(mock.NewPipelinesProvider()),
+			fn.WithRegistry(TestRegistry))
+	}))
+	cmd.SetArgs([]string{"--namespace=newns"})
+	stderr := strings.Builder{}
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "Warning: Function is in namespace 'myns', but requested namespace is 'newns'. Continuing with deployment to 'newns'."
+
+	// Ensure output contained warning if changing namespace
+	if !strings.Contains(stderr.String(), expected) {
+		t.Log("STDERR:\n" + stderr.String())
+		t.Fatalf("Expected warning not found:\n%v", expected)
+	}
+
+	// Ensure the function was saved as having been deployed to
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Namespace != "newns" {
+		t.Fatalf("expected function to be deoployed into namespace 'newns'.  got '%v'", f.Namespace)
+	}
+
+}
+
+// TestDeploy_NamespaceRedeployWarning ensures that redeploying a function
+// which is in a namespace other than the active namespace prints a warning.
+func TestDeploy_NamespaceRedeployWarning(t *testing.T) {
+	// Change profile to one whose current profile is 'test-ns-deploy'
+	defer WithEnvVar(t, "KUBECONFIG", filepath.Join(cwd(), "testdata", "kubeconfig_deploy_namespace"))()
+
+	// From within a temp directory
+	root, rm := Mktemp(t)
+	defer rm()
+
+	// Create a Function which appears to have been deployed to 'myns'
+	f := fn.Function{
+		Runtime:   "go",
+		Root:      root,
+		Namespace: "myns",
+	}
+	if err := fn.New().Create(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Redeploy the funciton without specifying namespace.
+	cmd := NewDeployCmd(NewClientFactory(func() *fn.Client {
+		return fn.New(
+			fn.WithDeployer(mock.NewDeployer()),
+			fn.WithBuilder(mock.NewBuilder()),
+			fn.WithPipelinesProvider(mock.NewPipelinesProvider()),
+			fn.WithRegistry(TestRegistry))
+	}))
+	cmd.SetArgs([]string{})
+	stderr := strings.Builder{}
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	expected := "Warning: Function is in namespace 'myns', but currently active namespace is 'test-ns-deploy'. Continuing with redeployment to 'myns'."
+
+	// Ensure output contained warning if changing namespace
+	if !strings.Contains(stderr.String(), expected) {
+		t.Log("STDERR:\n" + stderr.String())
+		t.Fatalf("Expected warning not found:\n%v", expected)
+	}
+
+	// Ensure the function was saved as having been deployed to
+	f, err := fn.NewFunction(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Namespace != "myns" {
+		t.Fatalf("expected function to be updated with namespace 'myns'.  got '%v'", f.Namespace)
+	}
+}

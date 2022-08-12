@@ -21,7 +21,7 @@ import (
 	"knative.dev/kn-plugin-func/buildpacks"
 	"knative.dev/kn-plugin-func/docker"
 	"knative.dev/kn-plugin-func/docker/creds"
-	"knative.dev/kn-plugin-func/k8s"
+	"knative.dev/kn-plugin-func/knative"
 	"knative.dev/kn-plugin-func/s2i"
 )
 
@@ -34,7 +34,7 @@ NAME
 	{{.Name}} deploy - Deploy a Function
 
 SYNOPSIS
-	{{.Name}} deploy [-R|--remote] [-r|--registry] [-i|--image]
+	{{.Name}} deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
 	             [-c|--confirm] [-v|--verbose]
@@ -99,7 +99,7 @@ EXAMPLES
 	  $ {{.Name}} deploy --remote --git-url=https://example.com/alice/myfunc.git
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
-		PreRunE:    bindEnv("confirm", "env", "git-url", "git-branch", "git-dir", "remote", "build", "builder", "builder-image", "image", "registry", "push", "platform", "path"),
+		PreRunE:    bindEnv("confirm", "env", "git-url", "git-branch", "git-dir", "remote", "build", "builder", "builder-image", "image", "registry", "push", "platform", "path", "namespace"),
 	}
 
 	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all configuration options (Env: $FUNC_CONFIRM)")
@@ -124,6 +124,7 @@ EXAMPLES
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")
 	cmd.Flags().BoolP("push", "u", true, "Push the Function image to registry before deploying (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
+	cmd.Flags().StringP("namespace", "n", "", "deploy into a specific namespace. (Env: $FUNC_NAMESPACE)")
 	setPathFlag(cmd)
 
 	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildStrategyList); err != nil {
@@ -192,7 +193,32 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		f.Builder = config.Builder
 	}
 	if config.Namespace != "" {
+		// If updating a function which is alredy presumably deployed (has the
+		// namespace member populated), that if we are requesting it be deployed
+		// to a different namespace, this results in an warning because it may
+		// result in an orphaned instance in another namespace.
+		if f.Namespace != "" && config.Namespace != f.Namespace {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Function is in namespace '%v', but requested namespace is '%v'. Continuing with deployment to '%v'.\n", f.Namespace, config.Namespace, config.Namespace)
+		}
 		f.Namespace = config.Namespace
+	} else {
+		// a new namespace was _not_ provided
+
+		// Default
+		if f.Namespace == "" && knative.DefaultNamespace() != "" {
+			// printing info only if default returned is nonempty
+			fmt.Fprintf(cmd.OutOrStdout(), "Using default namespace %v\n", knative.DefaultNamespace())
+			f.Namespace = knative.DefaultNamespace()
+		}
+
+		// Warn if the Function does include a destination namespace already, and
+		// this namespace differs from the user's current namespace (the k8s
+		// default namespace), this also results in a warning. becaus it ma appear
+		// to the user nothing happened.
+		if f.Namespace != "" && f.Namespace != knative.DefaultNamespace() {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: Function is in namespace '%v', but currently active namespace is '%v'. Continuing with redeployment to '%v'.\n", f.Namespace, knative.DefaultNamespace(), f.Namespace)
+
+		}
 	}
 	f.Envs, _, err = mergeEnvs(f.Envs, config.EnvToUpdate, config.EnvToRemove)
 	if err != nil {
@@ -202,11 +228,6 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		// TODO(lkingland):  This could instead be part of the config, relying on
 		// zero values rather than a flag indicating "Image Digest was Provided"
 		f.ImageDigest = imageSplit[1] // save image digest if provided in --image
-	}
-	// add ns to func.yaml on first deploy and warn if current context differs from func.yaml
-	f.Namespace, err = checkNamespaceDeploy(f.Namespace, config.Namespace)
-	if err != nil {
-		return
 	}
 
 	// Choose a builder based on the value of the --builder flag and a possible
@@ -627,27 +648,6 @@ func parseImageDigest(imageSplit []string, config deployConfig, cmd *cobra.Comma
 	config.Image = imageSplit[0]
 
 	return config, nil
-}
-
-// checkNamespaceDeploy checks current namespace against func.yaml and warns if its different
-// or sets namespace to be written in func.yaml if its the first deployment
-func checkNamespaceDeploy(funcNamespace string, confNamespace string) (string, error) {
-	currNamespace, err := k8s.GetNamespace("")
-	if err != nil {
-		return funcNamespace, err
-	}
-
-	// If ns exists in func.yaml & NOT given via CLI (--namespace flag) & current ns does NOT match func.yaml ns
-	if funcNamespace != "" && confNamespace == "" && (currNamespace != funcNamespace) {
-		fmt.Fprintf(os.Stderr, "Warning: Current namespace '%s' does not match namespace '%s' in func.yaml. Function is deployed at '%s' namespace\n", currNamespace, funcNamespace, funcNamespace)
-	}
-
-	// Add current namespace to func.yaml if it is NOT set yet & NOT given via --namespace.
-	if funcNamespace == "" {
-		funcNamespace = currNamespace
-	}
-
-	return funcNamespace, nil
 }
 
 var ErrRegistryRequired = errors.New(`A container registry is required.  For example:
