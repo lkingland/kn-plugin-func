@@ -151,33 +151,6 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		fn.WithBuilder(builder))
 	defer done()
 
-	// TODO: confirm this prompt is in .Prompt
-	// If the Function does not yet have an image name and one was not provided on the command line
-	/*
-		if function.Image == "" {
-			//  AND a --registry was not provided, then we need to
-			// prompt for a registry from which we can derive an image name.
-			if config.Registry == "" {
-				fmt.Println("A registry for Function images is required. For example, 'docker.io/tigerteam'.")
-
-				err = survey.AskOne(
-					&survey.Input{Message: "Registry for Function images:"},
-					&config.Registry, survey.WithValidator(ValidNamespaceAndRegistry(config.Path)))
-				if err != nil {
-					if errors.Is(err, terminal.InterruptErr) {
-						return nil
-					}
-					return
-				}
-				fmt.Println("Note: building a Function the first time will take longer than subsequent builds")
-			}
-
-			// We have the registry, so let's use it to derive the Function image name
-			config.Image = deriveImage(config.Image, config.Registry, config.Path)
-			function.Image = config.Image
-		}
-	*/
-
 	// Default Client Registry, Function Registry or explicit Image is required
 	if client.Registry() == "" && f.Registry == "" && f.Image == "" {
 		return ErrRegistryRequired
