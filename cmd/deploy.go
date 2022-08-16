@@ -206,6 +206,12 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		f.ImageDigest = imageSplit[1] // save image digest if provided in --image
 	}
 
+	// Validate that a builder short-name was obtained, whether that be from
+	// the funciton's prior state, or the value of flags/environment.
+	if err = ValidateBuilder(f.Builder); err != nil {
+		return
+	}
+
 	// Choose a builder based on the value of the --builder flag and a possible
 	// override for the build image for that builder to use from the optional
 	// builder-image flag.
@@ -218,10 +224,10 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		builder = buildpacks.NewBuilder(buildpacks.WithVerbose(config.Verbose))
 	} else if config.Builder == "s2i" {
 		builder = s2i.NewBuilder(s2i.WithVerbose(config.Verbose), s2i.WithPlatform(config.Platform))
-	} else {
-		err = errors.New("unrecognized builder: valid values are: s2i, pack")
-		return
 	}
+	// Note ValidateBuilder enforces validity of f.Builder
+
+	// Use the user-provided builder image, if supplied
 	if config.BuilderImage != "" {
 		f.BuilderImages[config.Builder] = config.BuilderImage
 	}

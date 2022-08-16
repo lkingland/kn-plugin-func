@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -195,7 +196,7 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 	if f, err = fn.NewFunction(root); err != nil {
 		t.Fatal(err)
 	}
-	if f.Builder != BuilderS2I {
+	if f.Builder != "s2i" {
 		t.Fatal("value of builder flag not persisted when provided")
 	}
 	// Build the function without specifying a Builder
@@ -247,4 +248,44 @@ func testBuilderPersistence(t *testing.T, testRegistry string, cmdBuilder func(C
 // the function by default, and is able to be overridden by flags/env vars.
 func TestBuild_BuilderPersistence(t *testing.T) {
 	testBuilderPersistence(t, "docker.io/tigerteam", NewBuildCmd)
+}
+
+// Test_ValidateBulder ensures that the builder validation
+// function pre-validates for all builder types supported by
+// this CLI.
+func Test_validateBuilder(t *testing.T) {
+	tests := []struct {
+		name      string
+		builder   string
+		wantError bool
+	}{
+		{
+			name:      "valid builder - pack",
+			builder:   "pack",
+			wantError: false,
+		},
+		{
+			name:      "valid builder - s2i",
+			builder:   "s2i",
+			wantError: false,
+		},
+		{
+			name:      "invalid builder",
+			builder:   "foo",
+			wantError: true,
+		},
+		{
+			name:      "builder not specified - invalid option",
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateBuilder(tt.builder)
+			if tt.wantError != (err != nil) {
+				t.Errorf("ValidateBuilder() = Wanted error %v but actually got %v", tt.wantError, err)
+			}
+		})
+	}
 }

@@ -15,6 +15,26 @@ import (
 	fn "knative.dev/kn-plugin-func"
 )
 
+// Builder short-names supported by this CLI
+const (
+	BuilderS2I  = "s2i"
+	BuilderPack = "pack"
+)
+
+// ValidateBuilder returns an error if the passed builder
+// short name ("s2i", "pack") is valid.
+func ValidateBuilder(s string) error {
+	if s == "" {
+		return errors.New("builder required")
+	}
+	for _, v := range []string{"s2i", "pack"} {
+		if v == s {
+			return nil
+		}
+	}
+	return fmt.Errorf("unrecognized builder '%v'", s)
+}
+
 func NewBuildCmd(newClient ClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
@@ -127,22 +147,26 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		f.Builder = config.Builder
 	}
 
+	// Validate that a builder short-name was obtained, whether that be from
+	// the funciton's prior state, or the value of flags/environment.
+	if err = ValidateBuilder(f.Builder); err != nil {
+		return
+	}
+
 	// Choose a builder based on the value of the --builder flag and a possible
 	// override for the build image for that builder to use from the optional
 	// builder-image flag.
 	var builder fn.Builder
-	if config.Builder == "pack" {
+	if f.Builder == "pack" {
 		if config.Platform != "" {
 			err = errors.New("the --platform flag works only with s2i builds")
 			return
 		}
 		builder = buildpacks.NewBuilder(buildpacks.WithVerbose(config.Verbose))
-	} else if config.Builder == "s2i" {
+	} else if f.Builder == "s2i" {
 		builder = s2i.NewBuilder(s2i.WithVerbose(config.Verbose), s2i.WithPlatform(config.Platform))
-	} else {
-		err = errors.New("unrecognized builder: valid values are: s2i, pack")
-		return
 	}
+	// Note ValidateBuilder enforces validity of f.Builder
 
 	// Use the user-provided builder image, if supplied
 	if config.BuilderImage != "" {
