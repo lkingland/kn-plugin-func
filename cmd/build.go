@@ -58,7 +58,7 @@ and the image name is stored in the configuration file.
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
 	setPathFlag(cmd)
 
-	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildStrategyList); err != nil {
+	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuilderList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
 

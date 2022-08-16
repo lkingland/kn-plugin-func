@@ -133,7 +133,7 @@ func CompleteBuildList(cmd *cobra.Command, args []string, complete string) ([]st
 	return []string{"auto", "true", "false"}, cobra.ShellCompDirectiveNoFileComp
 }
 
-func CompleteBuildStrategyList(cmd *cobra.Command, args []string, complete string) ([]string, cobra.ShellCompDirective) {
+func CompleteBuilderList(cmd *cobra.Command, args []string, complete string) ([]string, cobra.ShellCompDirective) {
 	if len(complete) >= 1 {
 		if strings.HasPrefix("pack", complete) {
 			return []string{"pack"}, cobra.ShellCompDirectiveNoFileComp

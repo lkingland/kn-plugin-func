@@ -34,7 +34,7 @@ func TestBuild_InvalidRegistry(t *testing.T) {
 	cmd.SetArgs([]string{"--registry=foo/bar/invald/myfunc"})
 
 	if err := cmd.Execute(); err == nil {
-		// TODO: typed ErrInvalidRegistry
+		// TODO: typed ErrInvalidRegistry or introspect output for error text
 		t.Fatal("invalid registry did not generate expected error")
 	}
 }

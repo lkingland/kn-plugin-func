@@ -65,10 +65,10 @@ DESCRIPTION
 	  used to override this behavior and force building either on or off.
 
 	Remote
-	  Building and deploying is by default executed on the current host.  This
+	  Building and pushing (deploying) is by default run on localhost.  This
 	  process can also be triggered to run remotely in a Tekton-enabled cluster.
 	  The --remote flag indicates that a build and deploy pipeline should be
-	  invoked in the remote.  functions deployed in this manner must have their
+	  invoked in the remote.  Functions deployed in this manner must have their
 	  source code kept in a git repository, and the URL to this source provided
 	  via --git-url.  A specific branch can be specified with --git-branch.
 
@@ -94,8 +94,8 @@ EXAMPLES
 	  local filesystem.
 	  $ {{.Name}} deploy --build=false
 
-	o Trigger a remote deploy, which instructs the cluster to build build and
-	  deploy the function in the specified git repository.
+	o Trigger a remote deploy, which instructs the cluster to build and deploy
+	  the function in the specified git repository.
 	  $ {{.Name}} deploy --remote --git-url=https://example.com/alice/myfunc.git
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
@@ -109,29 +109,25 @@ EXAMPLES
 	cmd.Flags().StringP("git-url", "g", "", "Repo url to push the code to be built (Env: $FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", "", "Git branch to be used for remote builds (Env: $FUNC_GIT_BRANCH)")
 	cmd.Flags().StringP("git-dir", "d", "", "Directory in the repo where the function is located (Env: $FUNC_GIT_DIR)")
-
-	// Remote indicates whether the deployment process (including potentially
-	// building as well) is being performed locally (default) or by triggering
-	// a process rremotely.
 	cmd.Flags().BoolP("remote", "", false, "Trigger a remote deployment.  Default is to deploy and build from the local system: $FUNC_REMOTE)")
 
-	// Flags shared with Build specifically related to building:
+	// Flags shared with Build (specifically related to the build step):
 	cmd.Flags().StringP("build", "b", "auto", "Build the function. [auto|true|false]. [Env: $FUNC_BUILD]")
 	cmd.Flags().Lookup("build").NoOptDefVal = "true" // --build is equivalient to --build=true
 	cmd.Flags().StringP("builder", "", DefaultBuilder, "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' and 's2i'. [Env: $FUNC_BUILDER]")
-	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
+	cmd.Flags().StringP("builder-image", "", "", "Builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)")
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")
 	cmd.Flags().BoolP("push", "u", true, "Push the function image to registry before deploying (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "", "Target platform to build (e.g. linux/amd64).")
-	cmd.Flags().StringP("namespace", "n", "", "deploy into a specific namespace. (Env: $FUNC_NAMESPACE)")
+	cmd.Flags().StringP("namespace", "n", "", "Deploy into a specific namespace. (Env: $FUNC_NAMESPACE)")
 	setPathFlag(cmd)
 
 	if err := cmd.RegisterFlagCompletionFunc("build", CompleteBuildList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
 
-	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuildStrategyList); err != nil {
+	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuilderList); err != nil {
 		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
 	}
 
@@ -325,7 +321,7 @@ func runDeploy(cmd *cobra.Command, _ []string, newClient ClientFactory) (err err
 		} else {
 			var build bool
 			if build, err = strconv.ParseBool(config.Build); err != nil {
-				return fmt.Errorf("unrecognized value for --build '%v'.  accepts 'auto', 'git', 'true' or 'false' (or similarly truthy value)", build)
+				return fmt.Errorf("unrecognized value for --build '%v'.  accepts 'auto', 'true' or 'false' (or similarly truthy value)", build)
 			}
 			if build {
 				if err = client.Build(cmd.Context(), config.Path); err != nil {
@@ -599,10 +595,6 @@ func (c deployConfig) Prompt() (deployConfig, error) {
 		Path:      answers.Path,
 		Verbose:   c.Verbose,
 	}
-
-	// TODO: This is probably not necessary, the client library
-	// already has logic and tests for populating image name.
-	// dc.Image = deriveImage(dc.Image, dc.Registry, dc.Path)
 
 	return dc, nil
 }
