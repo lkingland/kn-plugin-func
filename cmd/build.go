@@ -23,8 +23,8 @@ func NewBuildCmd(newClient ClientFactory) *cobra.Command {
 
 This command builds the function project in the current directory or in the directory
 specified by --path. The result will be a container image that is pushed to a registry.
-The func.yaml file is read to determine the image name and registry. 
-If the project has not already been built, either --registry or --image must be provided 
+The func.yaml file is read to determine the image name and registry.
+If the project has not already been built, either --registry or --image must be provided
 and the image name is stored in the configuration file.
 `,
 		Example: `
@@ -143,6 +143,8 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		err = errors.New("unrecognized builder: valid values are: s2i, pack")
 		return
 	}
+
+	// Use the user-provided builder image, if supplied
 	if config.BuilderImage != "" {
 		f.BuilderImages[config.Builder] = config.BuilderImage
 	}
