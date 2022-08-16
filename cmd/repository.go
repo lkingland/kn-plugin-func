@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	fn "knative.dev/kn-plugin-func"
+	"knative.dev/kn-plugin-func/config"
 )
 
 // command constructors
@@ -140,7 +141,13 @@ EXAMPLES
 		PreRunE:    bindEnv("confirm"),
 	}
 
-	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all options interactively (Env: $FUNC_CONFIRM)")
+	// Load Config
+	cfg, err := config.NewDefault()
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.ConfigPath(), err)
+	}
+
+	cmd.Flags().BoolP("confirm", "c", cfg.Confirm, "Prompt to confirm all options interactively (Env: $FUNC_CONFIRM)")
 
 	cmd.SetHelpFunc(defaultTemplatedHelp)
 

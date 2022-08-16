@@ -10,30 +10,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"knative.dev/kn-plugin-func/buildpacks"
+	"knative.dev/kn-plugin-func/config"
 	"knative.dev/kn-plugin-func/s2i"
 
 	fn "knative.dev/kn-plugin-func"
 )
-
-// Builder short-names supported by this CLI
-const (
-	BuilderS2I  = "s2i"
-	BuilderPack = "pack"
-)
-
-// ValidateBuilder returns an error if the passed builder
-// short name ("s2i", "pack") is valid.
-func ValidateBuilder(s string) error {
-	if s == "" {
-		return errors.New("builder required")
-	}
-	for _, v := range []string{"s2i", "pack"} {
-		if v == s {
-			return nil
-		}
-	}
-	return fmt.Errorf("unrecognized builder '%v'", s)
-}
 
 func NewBuildCmd(newClient ClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
@@ -69,9 +50,15 @@ and the image name is stored in the configuration file.
 		PreRunE:    bindEnv("image", "path", "builder", "registry", "confirm", "push", "builder-image", "platform"),
 	}
 
+	// Load Config
+	cfg, err := config.NewDefault()
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.ConfigPath(), err)
+	}
+
 	cmd.Flags().StringP("builder", "b", DefaultBuilder, "build strategy to use when creating the underlying image. Currently supported build strategies are 'pack' or 's2i'.")
 	cmd.Flags().StringP("builder-image", "", "", "builder image, either an as a an image name or a mapping name.\nSpecified value is stored in func.yaml (as 'builder' field) for subsequent builds. ($FUNC_BUILDER_IMAGE)")
-	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all configuration options (Env: $FUNC_CONFIRM)")
+	cmd.Flags().BoolP("confirm", "c", cfg.Confirm, "Prompt to confirm all configuration options (Env: $FUNC_CONFIRM)")
 	cmd.Flags().StringP("image", "i", "", "Full image name in the form [registry]/[namespace]/[name]:[tag] (optional). This option takes precedence over --registry (Env: $FUNC_IMAGE)")
 	cmd.Flags().StringP("registry", "r", GetDefaultRegistry(), "Registry + namespace part of the image to build, ex 'quay.io/myuser'.  The full image name is automatically determined based on the local directory name. If not provided the registry will be taken from func.yaml (Env: $FUNC_REGISTRY)")
 	cmd.Flags().BoolP("push", "u", false, "Attempt to push the function image after being successfully built")
@@ -93,6 +80,26 @@ and the image name is stored in the configuration file.
 	}
 
 	return cmd
+}
+
+// Builder short-names supported by this CLI
+const (
+	BuilderS2I  = "s2i"
+	BuilderPack = "pack"
+)
+
+// ValidateBuilder returns an error if the passed builder
+// short name ("s2i", "pack") is valid.
+func ValidateBuilder(s string) error {
+	if s == "" {
+		return errors.New("builder required")
+	}
+	for _, v := range []string{"s2i", "pack"} {
+		if v == s {
+			return nil
+		}
+	}
+	return fmt.Errorf("unrecognized builder '%v'", s)
 }
 
 func ValidNamespaceAndRegistry(path string) survey.Validator {

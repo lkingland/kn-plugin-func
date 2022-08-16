@@ -25,7 +25,11 @@ const (
 )
 
 type Config struct {
+	// Language runtime to use by default for new functions.
 	Language string `yaml:"language"`
+
+	// Confirm prompts by default on all commands which support them.
+	Confirm bool `yaml:"confirm"`
 }
 
 func New() Config {

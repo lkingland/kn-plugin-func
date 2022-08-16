@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	fn "knative.dev/kn-plugin-func"
+	"knative.dev/kn-plugin-func/config"
 	"knative.dev/kn-plugin-func/utils"
 )
 
@@ -102,6 +103,12 @@ EXAMPLES
 		PreRunE:    bindEnv("path", "format", "target", "id", "source", "type", "data", "content-type", "file", "confirm"),
 	}
 
+	// Load Config
+	cfg, err := config.NewDefault()
+	if err != nil {
+		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.ConfigPath(), err)
+	}
+
 	// Flags
 	cmd.Flags().StringP("path", "p", cwd(), "Path to the function which should have its instance invoked. (Env: $FUNC_PATH)")
 	cmd.Flags().StringP("format", "f", "", "Format of message to send, 'http' or 'cloudevent'.  Default is to choose automatically. (Env: $FUNC_FORMAT)")
@@ -112,7 +119,7 @@ EXAMPLES
 	cmd.Flags().StringP("content-type", "", fn.DefaultInvokeContentType, "Content Type of the data. (Env: $FUNC_CONTENT_TYPE)")
 	cmd.Flags().StringP("data", "", fn.DefaultInvokeData, "Data to send in the request. (Env: $FUNC_DATA)")
 	cmd.Flags().StringP("file", "", "", "Path to a file to use as data. Overrides --data flag and should be sent with a correct --content-type. (Env: $FUNC_FILE)")
-	cmd.Flags().BoolP("confirm", "c", false, "Prompt to confirm all options interactively. (Env: $FUNC_CONFIRM)")
+	cmd.Flags().BoolP("confirm", "c", cfg.Confirm, "Prompt to confirm all options interactively. (Env: $FUNC_CONFIRM)")
 
 	cmd.SetHelpFunc(defaultTemplatedHelp)
 
