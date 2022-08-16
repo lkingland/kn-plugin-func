@@ -32,6 +32,8 @@ type Config struct {
 	Confirm bool `yaml:"confirm"`
 }
 
+// New Config struct with all members set to static defaults.  See NewDefaults
+// for one which further takes into account the optional config file.
 func New() Config {
 	return Config{
 		Language: DefaultLanguage,
@@ -72,6 +74,7 @@ func Load(path string) (c Config, err error) {
 	return
 }
 
+// Save the config to the given path
 func (c Config) Save(path string) (err error) {
 	var bb []byte
 	if bb, err = yaml.Marshal(&c); err != nil {

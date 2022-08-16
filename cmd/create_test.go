@@ -110,7 +110,7 @@ func TestCreateConfig_RepositoriesPath(t *testing.T) {
 
 // TestCreate_ConfigOptional ensures that the system can be used without
 // any additional configuration being required.
-func TestCreate_ConfigLoads(t *testing.T) {
+func TestCreate_ConfigOptional(t *testing.T) {
 	// Empty Home
 	// the func directory, and other static assets will be created here
 	// if they do not exist.
