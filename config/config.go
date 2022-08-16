@@ -34,6 +34,28 @@ func New() Config {
 	}
 }
 
+// Creates a new config populated by global defaults as defined by the
+// config file located in .Path() (the global func settings path, which is
+//  usually ~/.config/func)
+func NewDefault() (cfg Config, err error) {
+	// a config populated only by static defaults
+	cfg = New()       // cfg now populated by static defaults
+	p := ConfigPath() // applies ~/.config/func/config.yaml if it exists
+	if _, err = os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			err = nil // config file is not required
+		}
+		return
+	}
+	bb, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	err = yaml.Unmarshal(bb, &cfg) // cfg now has applied config.yaml
+	return
+}
+
+// Load the config exactly as it exists at path.
 func Load(path string) (c Config, err error) {
 	if _, err = os.Stat(path); err != nil {
 		return
@@ -75,6 +97,16 @@ func Path() (path string) {
 
 	mkdir(path)
 	return
+}
+
+// ConfigPath returns the full path to look for a config file.
+func ConfigPath() string {
+	// TODO: this will likely end up including considering environment variable
+	// FUNC_CONFIG_FILE which will allow one to explicitly set a config file
+	// location.  At present a custom XDG_CONFIG_HOME is all needed.
+
+	// usually ~/.config/func/config.yaml
+	return filepath.Join(Path(), Filename)
 }
 
 func mkdir(path string) {

@@ -244,3 +244,13 @@ func RunGitServer(t *testing.T, gitRoot string) (hostPort string) {
 
 	return hostPort
 }
+
+// Cwd returns the current working directory or exits 1 printing the error.
+func Cwd() (cwd string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to determine current working directory: %v", err)
+		os.Exit(1)
+	}
+	return cwd
+}

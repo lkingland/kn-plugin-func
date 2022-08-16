@@ -1,8 +1,6 @@
 package config_test
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -24,7 +22,7 @@ func TestNewDefaults(t *testing.T) {
 // TestLoad ensures that loading a config reads values
 // in from a config file at path.
 func TestLoad(t *testing.T) {
-	cfg, err := config.Load("testdata/config.yaml")
+	cfg, err := config.Load("testdata/func/config.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,16 +61,34 @@ func TestSave(t *testing.T) {
 	}
 }
 
-// TestPath ensures that the Path returns
+// TestPath ensures that the Path accessor returns
 // XDG_CONFIG_HOME/.config/func
 func TestPath(t *testing.T) {
 	home := t.TempDir()                 // root of all configs
 	path := filepath.Join(home, "func") // our config
 
 	t.Setenv("XDG_CONFIG_HOME", home)
-	fmt.Printf("Checking XDG_CONFIG_HOME: %v\n", os.Getenv("XDG_CONFIG_HOME"))
 
 	if config.Path() != path {
 		t.Fatalf("expected config path '%v', got '%v'", path, config.Path())
+	}
+}
+
+// TestNewDefault ensures that the default returned from NewDefault includes
+// both the static defaults (see TestNewDefaults), as well as those from the
+// currently effective global config path (~/config/func).
+func TestNewDefault(t *testing.T) {
+	// Custom config home results in a config file default path of
+	// ./testdata/func/config.yaml
+	home := filepath.Join(Cwd(), "testdata")
+	t.Setenv("XDG_CONFIG_HOME", home)
+
+	cfg, err := config.NewDefault() // Should load values from above config
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Language != "custom" {
+		t.Fatalf("config file not loaded")
 	}
 }

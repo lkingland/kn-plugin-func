@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -77,15 +76,9 @@ EXAMPLES
 	}
 
 	// Load Config
-	configFilename := filepath.Join(config.Path(), config.Filename)
-	cfg, err := config.Load(configFilename)
+	cfg, err := config.NewDefault()
 	if err != nil {
-		if os.IsNotExist(err) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Global config file not found: skipping.\n")
-		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "unable to load config '%v'. %v\n",
-				configFilename, err)
-		}
+		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.ConfigPath(), err)
 	}
 
 	// Flags
