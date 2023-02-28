@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
 	"knative.dev/func/pkg/builders"
 	fn "knative.dev/func/pkg/functions"
 	"knative.dev/func/pkg/k8s"
@@ -84,13 +85,13 @@ func (c Global) RegistryDefault() string {
 	}
 }
 
-// NewDefault returns a config populated by global defaults as defined by the
+// LoadGlobal returns a config populated by global defaults as defined by the
 // config file located in .Path() (the global func settings path, which is
 //
 //	usually ~/.config/func).
 //
 // The config path is not required to be present.
-func NewDefault() (cfg Global, err error) {
+func LoadGlobal() (cfg Global, err error) {
 	cfg = New()
 	cp := File()
 	bb, err := os.ReadFile(cp)
@@ -104,8 +105,8 @@ func NewDefault() (cfg Global, err error) {
 	return
 }
 
-// Load the config exactly as it exists at path (no static defaults)
-func Load(path string) (c Global, err error) {
+// LoadGlobalVerbatim the config exactly as it exists at path (no static defaults)
+func LoadGlobalVerbatim(path string) (c Global, err error) {
 	bb, err := os.ReadFile(path)
 	if err != nil {
 		return c, fmt.Errorf("error reading global config: %v", err)

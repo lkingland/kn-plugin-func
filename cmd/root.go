@@ -133,7 +133,7 @@ func registry() string {
 	if r := viper.GetString("registry"); r != "" {
 		return r
 	}
-	cfg, _ := config.NewDefault()
+	cfg, _ := config.LoadGlobal()
 	return cfg.RegistryDefault()
 }
 

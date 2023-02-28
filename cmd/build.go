@@ -71,7 +71,7 @@ EXAMPLES
 	}
 
 	// Global Config
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}

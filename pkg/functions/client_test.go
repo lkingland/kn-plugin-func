@@ -20,6 +20,7 @@ import (
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"knative.dev/func/pkg/builders"
+	"knative.dev/func/pkg/config"
 	fn "knative.dev/func/pkg/functions"
 	"knative.dev/func/pkg/mock"
 	. "knative.dev/func/pkg/testing"
@@ -1043,9 +1044,6 @@ func TestClient_Pipelines_Deploy_Image(t *testing.T) {
 		Name:    "myfunc",
 		Runtime: "node",
 		Root:    root,
-		Build: fn.BuildSpec{
-			Git: fn.Git{URL: "http://example-git.com/alice/myfunc.git"},
-		},
 	}
 
 	err := client.Init(f)
@@ -1062,6 +1060,11 @@ func TestClient_Pipelines_Deploy_Image(t *testing.T) {
 	if f.Image != "" {
 		t.Fatalf("new function should have no image, got '%v'", f.Image)
 	}
+
+	lc := config.Local{
+		GitURL: "http://example-git.com/alice/myfunc.git",
+	}
+	_ = lc.WriteFor(f)
 
 	// Upon pipeline run, the function should be populated;
 	if f, err = client.RunPipeline(context.Background(), f); err != nil {
@@ -1570,7 +1573,7 @@ func TestClient_CreateMigration(t *testing.T) {
 	}
 
 	// A freshly created function should have the latest migration
-	if f.SpecVersion != fn.LastSpecVersion() {
+	if f.SpecVersion != fn.LastSpecVersion(fn.Migrations) {
 		t.Fatal("freshly created function should have the latest migration")
 	}
 }

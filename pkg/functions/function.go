@@ -26,7 +26,7 @@ type Function struct {
 	SpecVersion string `yaml:"specVersion"` // semver format
 
 	// Root on disk at which to find/create source and config files.
-	Root string `yaml:"-"`
+	Root string `yaml:"-"` // Not persisted to func.yaml
 
 	// Name of the function.
 	Name string `yaml:"name" jsonschema:"pattern=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
@@ -76,9 +76,6 @@ type Function struct {
 
 // BuildSpec
 type BuildSpec struct {
-	// Git stores information about an optionally associated git repository.
-	Git Git `yaml:"git,omitempty"`
-
 	// BuilderImages define optional explicit builder images to use by
 	// builder implementations in leau of the in-code defaults.  They key
 	// is the builder's short name.  For example:
@@ -145,7 +142,7 @@ type BuildConfig struct {
 // NewFunctionWith defaults as provided.
 func NewFunctionWith(defaults Function) Function {
 	if defaults.SpecVersion == "" {
-		defaults.SpecVersion = LastSpecVersion()
+		defaults.SpecVersion = LastSpecVersion(Migrations)
 	}
 	if defaults.Template == "" {
 		defaults.Template = DefaultTemplate
@@ -168,9 +165,6 @@ func NewFunctionWith(defaults Function) Function {
 // concerning itself with backwards compatibility. Migrators must therefore
 // selectively consider the minimal validation necessary to enable migration.
 func NewFunction(path string) (f Function, err error) {
-	f.Build.BuilderImages = make(map[string]string)
-	f.Deploy.Annotations = make(map[string]string)
-
 	// Path defaults to current working directory, and if provided explicitly
 	// Path must exist and be a directory
 	if path == "" {
@@ -199,30 +193,48 @@ func NewFunction(path string) (f Function, err error) {
 		return
 	}
 
-	// Path is valid and func.yaml exists: load it
-	bb, err := os.ReadFile(filename)
+	// Path is valid and func.yaml exists: load it, migrated
+	f, err = Migrate(f.Root, Migrations)
 	if err != nil {
 		return
 	}
-	var functionMarshallingError error
-	var functionMigrationError error
-	if marshallingErr := yaml.Unmarshal(bb, &f); marshallingErr != nil {
-		functionMarshallingError = formatUnmarshalError(marshallingErr) // human-friendly unmarshalling errors
+
+	// Initialize anything potentially nil
+	if f.Build.BuilderImages == nil {
+		f.Build.BuilderImages = make(map[string]string)
 	}
-	if f, err = f.Migrate(); err != nil {
-		functionMigrationError = err
+	if f.Deploy.Annotations == nil {
+		f.Deploy.Annotations = make(map[string]string)
 	}
-	// Only if migration fail return errors to the user. include marshalling error if present
-	if functionMigrationError != nil {
-		//returning both  migrations and marshalling errors to the user
-		errorText := "Error: \n"
-		if functionMarshallingError != nil {
-			errorText += "Marshalling: " + functionMarshallingError.Error()
-		}
-		errorText += "\n" + "Migration: " + functionMigrationError.Error()
-		return Function{}, errors.New(errorText)
-	}
+
 	return
+
+	// TODO: refactor this back in more gooder
+	/*
+		bb, err := os.ReadFile(filename)
+		if err != nil {
+			return
+		}
+		var functionMarshallingError error
+		var functionMigrationError error
+		if marshallingErr := yaml.Unmarshal(bb, &f); marshallingErr != nil {
+			functionMarshallingError = formatUnmarshalError(marshallingErr) // human-friendly unmarshalling errors
+		}
+		if f, err = f.Migrate(); err != nil {
+			functionMigrationError = err
+		}
+		// Only if migration fail return errors to the user. include marshalling error if present
+		if functionMigrationError != nil {
+			//returning both  migrations and marshalling errors to the user
+			errorText := "Error: \n"
+			if functionMarshallingError != nil {
+				errorText += "Marshalling: " + functionMarshallingError.Error()
+			}
+			errorText += "\n" + "Migration: " + functionMigrationError.Error()
+			return Function{}, errors.New(errorText)
+		}
+		return
+	*/
 }
 
 // Validate function is logically correct, returning a bundled, and quite
@@ -239,7 +251,6 @@ func (f Function) Validate() error {
 		ValidateEnvs(f.Run.Envs),
 		validateOptions(f.Deploy.Options),
 		ValidateLabels(f.Deploy.Labels),
-		validateGit(f.Build.Git),
 	}
 
 	var b strings.Builder
@@ -537,6 +548,8 @@ func isEffectivelyEmpty(dir string) (bool, error) {
 }
 
 // returns true if the given path contains an initialized function.
+/* TODO: remove as deprecated (used in .Init) because now using
+NewFunction().Initialized() directly
 func hasInitializedFunction(path string) (bool, error) {
 	var err error
 	var filename = filepath.Join(path, FunctionFile)
@@ -560,6 +573,7 @@ func hasInitializedFunction(path string) (bool, error) {
 	}
 	return f.Initialized(), nil
 }
+*/
 
 // Format yaml unmarshall error to be more human friendly.
 func formatUnmarshalError(err error) error {

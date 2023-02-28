@@ -527,7 +527,7 @@ func (c *Client) New(ctx context.Context, cfg Function) (route string, err error
 func (c *Client) Init(cfg Function) (err error) {
 	// convert Root path to absolute
 	cfg.Root, err = filepath.Abs(cfg.Root)
-	cfg.SpecVersion = LastSpecVersion()
+	cfg.SpecVersion = LastSpecVersion(Migrations)
 	if err != nil {
 		return
 	}
@@ -537,20 +537,16 @@ func (c *Client) Init(cfg Function) (err error) {
 		return
 	}
 
-	// Create should never clobber a pre-existing function
-	hasFunc, err := hasInitializedFunction(cfg.Root)
-	if err != nil {
-		return err
-	}
-	if hasFunc {
-		return fmt.Errorf("function at '%v' already initialized", cfg.Root)
-	}
-
 	// Path is defaulted to the current working directory
 	if cfg.Root == "" {
 		if cfg.Root, err = os.Getwd(); err != nil {
 			return
 		}
+	}
+
+	// Create should never clobber a pre-existing function
+	if f, err := NewFunction(cfg.Root); err == nil && f.Initialized() {
+		return fmt.Errorf("path '%v' contains an initialized function", cfg.Root)
 	}
 
 	// Name is defaulted to the directory of the given path.

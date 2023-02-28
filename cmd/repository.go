@@ -150,7 +150,7 @@ EXAMPLES
 	}
 
 	// Config
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
@@ -191,7 +191,7 @@ func NewRepositoryAddCmd(newClient ClientFactory) *cobra.Command {
 		PreRunE:    bindEnv("confirm"),
 	}
 
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
@@ -212,7 +212,7 @@ func NewRepositoryRenameCmd(newClient ClientFactory) *cobra.Command {
 		PreRunE: bindEnv("confirm"),
 	}
 
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
@@ -235,7 +235,7 @@ func NewRepositoryRemoveCmd(newClient ClientFactory) *cobra.Command {
 		PreRunE:    bindEnv("confirm"),
 	}
 
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}

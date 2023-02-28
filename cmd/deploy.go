@@ -82,6 +82,8 @@ DESCRIPTION
 	  eliminating the need for a local container engine.  To trigger deployment
 	  of a git repository instead of local source, combine with '--git-url':
 	  '{{rootCmdUse}} deploy --remote --git-url=git.example.com/alice/f.git'
+	  Values for --remote and the --git-x flags are rememberd for subsequent
+	  deploys on the current system only.
 
 EXAMPLES
 
@@ -130,15 +132,21 @@ EXAMPLES
 	}
 
 	// Global Config
-	cfg, err := config.NewDefault()
+	cfg, err := config.LoadGlobal()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
 
-	// Function Context
+	// Function with Context
 	f, _ := fn.NewFunction(effectivePath())
 	if f.Initialized() {
 		cfg = cfg.Apply(f)
+	}
+
+	// Function-Local Config
+	lcfg, err := config.LoadLocal()
+	if err != nil {
+		cfg = cfg.ApplyLocal(f)
 	}
 
 	// Flags
@@ -156,7 +164,7 @@ EXAMPLES
 		"Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. (Env: $FUNC_NAMESPACE)")
 
 	// Function-Context Flags:
-	// Options whose value is avaolable on the function with context only
+	// Options whose value is available on the function with context only
 	// (persisted but not globally configurable)
 	builderImage := f.Build.BuilderImages[f.Build.Builder]
 	cmd.Flags().StringP("builder-image", "", builderImage,
@@ -166,6 +174,14 @@ EXAMPLES
 	cmd.Flags().StringArrayP("env", "e", []string{}, "Environment variable to set in the form NAME=VALUE. "+
 		"You may provide this flag multiple times for setting multiple environment variables. "+
 		"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
+
+	// Function-Local-Context Flags:
+	// Options whose value is applicable to the current funciton, but is a system
+	// setting rather than function metadata.
+	// I.e. "On this machine, this funciton should by default deploy remotely
+	// from the given git url and branch".  These values are local only because
+	// they indicate how this system performs a deployment, not anytying about
+	// the function itself.
 	cmd.Flags().StringP("git-url", "g", f.Build.Git.URL,
 		"Repo url to push the code to be built (Env: $FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", f.Build.Git.Revision,

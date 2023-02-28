@@ -15,7 +15,7 @@ import (
 // TestNewDefaults ensures that the default Config
 // constructor yelds a struct prepopulated with static
 // defaults.
-func TestNewDefaults(t *testing.T) {
+func TestGlobal_NewDefaults(t *testing.T) {
 	cfg := config.New()
 	if cfg.Language != config.DefaultLanguage {
 		t.Fatalf("expected config's language = '%v', got '%v'", config.DefaultLanguage, cfg.Language)
@@ -25,8 +25,8 @@ func TestNewDefaults(t *testing.T) {
 // TestLoad ensures that loading a config reads values
 // in from a config file at path, and in this case (unlike NewDefault) the
 // file must exist at path or error.
-func TestLoad(t *testing.T) {
-	cfg, err := config.Load(filepath.Join("testdata", "TestLoad", "func", "config.yaml"))
+func TestGlobal_Load(t *testing.T) {
+	cfg, err := config.LoadGlobalVerbatim(filepath.Join("testdata", "TestLoad", "func", "config.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,14 +35,14 @@ func TestLoad(t *testing.T) {
 	}
 
 	// and ensure error
-	cfg, err = config.Load("invalid/path")
+	cfg, err = config.LoadGlobalVerbatim("invalid/path")
 	if err == nil {
 		t.Fatal("did not receive expected error loading nonexistent config path")
 	}
 }
 
 // TestWrite ensures that writing a config persists.
-func TestWrite(t *testing.T) {
+func TestGlobal_Write(t *testing.T) {
 	root, cleanup := Mktemp(t)
 	t.Cleanup(cleanup)
 	t.Setenv("XDG_CONFIG_HOME", root)
@@ -64,7 +64,7 @@ func TestWrite(t *testing.T) {
 	}
 
 	// Confirm value was persisted
-	if cfg, err = config.Load(config.File()); err != nil {
+	if cfg, err = config.LoadGlobalVerbatim(config.File()); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Language != "example" {
@@ -74,7 +74,7 @@ func TestWrite(t *testing.T) {
 
 // TestPath ensures that the Path accessor returns
 // XDG_CONFIG_HOME/.config/func
-func TestPath(t *testing.T) {
+func TestGlobal_Path(t *testing.T) {
 	home := t.TempDir()                 // root of all configs
 	path := filepath.Join(home, "func") // our config
 
@@ -88,13 +88,13 @@ func TestPath(t *testing.T) {
 // TestNewDefault ensures that the default returned from NewDefault includes
 // both the static defaults (see TestNewDefaults), as well as those from the
 // currently effective global config path (~/config/func).
-func TestNewDefault(t *testing.T) {
+func TestGlobal_NewDefault(t *testing.T) {
 	// Custom config home results in a config file default path of
 	// ./testdata/func/config.yaml
 	home := filepath.Join(Cwd(), "testdata")
 	t.Setenv("XDG_CONFIG_HOME", home)
 
-	cfg, err := config.NewDefault() // Should load values from above config
+	cfg, err := config.LoadGlobal() // Should load values from above config
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestNewDefault(t *testing.T) {
 }
 
 // TestCreatePaths ensures that the paths are created when requested.
-func TestCreatePaths(t *testing.T) {
+func TestGlobal_CreatePaths(t *testing.T) {
 	home, cleanup := Mktemp(t)
 	t.Cleanup(cleanup)
 
@@ -147,14 +147,14 @@ func TestCreatePaths(t *testing.T) {
 
 // TestNewDefault_ConfigNotRequired ensures that when creating a new
 // config which would load a global config, its nonexistence causes no error.
-func TestNewDefault_ConfigNotRequired(t *testing.T) {
+func TestGlobal_NewDefault_ConfigNotRequired(t *testing.T) {
 	// Custom config home results in a config file default path of
 	// ./testdata/func/config.yaml
 	home, cleanup := Mktemp(t)
 	t.Cleanup(cleanup)
 	t.Setenv("XDG_CONFIG_HOME", home)
 
-	_, err := config.NewDefault() // Should not error despite no config.
+	_, err := config.LoadGlobal() // Should not error despite no config.
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestNewDefault_ConfigNotRequired(t *testing.T) {
 
 // TestRepositoriesPath returns the path expected
 // (XDG_CONFIG_HOME/func/repositories by default)
-func TestRepositoriesPath(t *testing.T) {
+func TestGlobal_RepositoriesPath(t *testing.T) {
 	home, cleanup := Mktemp(t)
 	t.Cleanup(cleanup)
 	t.Setenv("XDG_CONFIG_HOME", home)
@@ -176,7 +176,7 @@ func TestRepositoriesPath(t *testing.T) {
 // TestDefaultNamespace ensures that, when there is a problem determining the
 // active namespace, the static DefaultNamespace ("default") is used and that
 // the currently active k8s namespace is used as the default if available.
-func TestDefaultNamespace(t *testing.T) {
+func TestGlobal_DefaultNamespace(t *testing.T) {
 	cwd := Cwd() // store for use after Mktemp which changes working directory
 
 	// Namespace "default" when empty home
@@ -203,7 +203,7 @@ func TestDefaultNamespace(t *testing.T) {
 // in every member of config in the intersection of the two sets, global config
 // and function, to be set to the values of the function.
 // (See the associated cfg.Configure)
-func TestApply(t *testing.T) {
+func TestGlobal_Apply(t *testing.T) {
 	// Yes, every member needs to be painstakingly enumerated by hand, because
 	// the sets are not equivalent.  Not all global settings have an associated
 	// member on the function (example: confirm), and not all members of a
@@ -254,7 +254,7 @@ func TestApply(t *testing.T) {
 // of the function in the intersection of the two sets, global config and function
 // members, to be set to the values of the config.
 // (See the associated cfg.Apply)
-func TestConfigure(t *testing.T) {
+func TestGlobal_Configure(t *testing.T) {
 	f := fn.Function{}
 	cfg := config.Global{
 		Builder:   "builder",
@@ -297,7 +297,7 @@ func TestConfigure(t *testing.T) {
 
 // TestGet_Invalid ensures that attempting to get the value of a nonexistent
 // member returns nil.
-func TestGet_Invalid(t *testing.T) {
+func TestGlobal_Get_Invalid(t *testing.T) {
 	v := config.Get(config.Global{}, "invalid")
 	if v != nil {
 		t.Fatalf("expected accessing a nonexistent member to return nil, but got: %v", v)
@@ -309,7 +309,7 @@ func TestGet_Invalid(t *testing.T) {
 // (capitalized) exported member name of the struct in order to be consistent
 // with the disk-serialized config file format, and thus integrate nicely with
 // CLIs, etc.
-func TestGet_Valid(t *testing.T) {
+func TestGlobal_Get_Valid(t *testing.T) {
 	c := config.Global{
 		Builder: "myBuilder",
 		Confirm: true,
@@ -327,7 +327,7 @@ func TestGet_Valid(t *testing.T) {
 }
 
 // TestSet_Invalid ensures that attemptint to set an invalid field errors.
-func TestSet_Invalid(t *testing.T) {
+func TestGlobal_Set_Invalid(t *testing.T) {
 	_, err := config.SetString(config.Global{}, "invalid", "foo")
 	if err == nil {
 		t.Fatal("did not receive expected error setting a nonexistent field")
@@ -336,7 +336,7 @@ func TestSet_Invalid(t *testing.T) {
 
 // TestSet_ValidTyped ensures that attempting to set attributes with valid
 // names and typed values succeeds.
-func TestSet_ValidTyped(t *testing.T) {
+func TestGlobal_Set_ValidTyped(t *testing.T) {
 	cfg := config.Global{}
 
 	// Set a String
@@ -363,7 +363,7 @@ func TestSet_ValidTyped(t *testing.T) {
 
 // TestSet_ValidStrings ensures that setting valid attribute names using
 // the string representation of their values succeeds.
-func TestSet_ValidStrings(t *testing.T) {
+func TestGlobal_Set_ValidStrings(t *testing.T) {
 	cfg := config.Global{}
 
 	// Set a String from a string
@@ -393,7 +393,7 @@ func TestSet_ValidStrings(t *testing.T) {
 // the current names and values of the global config.
 // The name is the name that can be used with Get and Set.  The value is the
 // string serialization of the value for the given name.
-func TestList(t *testing.T) {
+func TestGlobal_List(t *testing.T) {
 	values := config.List()
 	expected := []string{
 		"builder",
