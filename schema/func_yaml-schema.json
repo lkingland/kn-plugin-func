@@ -40,6 +40,12 @@
 						"$ref": "#/definitions/Env"
 					},
 					"type": "array"
+				},
+				"buildCommand": {
+					"type": "string"
+				},
+				"baseImage": {
+					"type": "string"
 				}
 			},
 			"additionalProperties": false,

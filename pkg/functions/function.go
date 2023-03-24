@@ -35,6 +35,10 @@ type Function struct {
 	Runtime string `yaml:"runtime"`
 
 	// Template for the function.
+	// Template used is not persisted because the template has no bearing on
+	// its forward usage and should not constrain the function.  Instead,
+	// consider using the "Invoke" member which is a hint for the method signature
+	// expected of this function.
 	Template string `yaml:"-"`
 
 	// Registry at which to store interstitial containers, in the form
@@ -64,13 +68,13 @@ type Function struct {
 	// See Client.Invoke for usage.
 	Invoke string `yaml:"invoke,omitempty"`
 
-	//BuildSpec define the build properties for a function
+	// BuildSpec define the build properties for a function
 	Build BuildSpec `yaml:"build"`
 
-	//RunSpec define the runtime properties for a function
+	// RunSpec define the runtime properties for a function
 	Run RunSpec `yaml:"run"`
 
-	//DeploySpec define the deployment properties for a function
+	// DeploySpec define the deployment properties for a function
 	Deploy DeploySpec `yaml:"deploy"`
 }
 
@@ -94,8 +98,22 @@ type BuildSpec struct {
 	// build (pack, s2i, etc)
 	Builder string `yaml:"builder" jsonschema:"enum=pack,enum=s2i"`
 
-	// Build Env variables to be set
+	// Build Env variables to be set.
 	BuildEnvs []Env `yaml:"buildEnvs"`
+
+	// BuildCOmmand specifies a custom explicit command to use when building the function
+	// using the Host builder. Currently only supported by the Host builder.
+	//
+	// This might be useful when, for example, the function is written in
+	// Go and the function developer needs Libc compatibility, in which case
+	// the default command will need to be replaced with:
+	// go build -ldflags "-linkmode 'external' -extldflags '-static'"
+	BuildCommand string `yaml:"buildCommand,omitempty"`
+
+	// BaseImage specifies a custom base image to use as the base layer when
+	// constructing the Function container.   Currently only supported by
+	// the Host builder.
+	BaseImage string `yaml:"baseImage,omitempty"`
 }
 
 // RunSpec
@@ -104,7 +122,7 @@ type RunSpec struct {
 	Volumes []Volume `yaml:"volumes"`
 
 	// Env variables to be set
-	Envs []Env `yaml:"envs"`
+	Envs Envs `yaml:"envs"`
 }
 
 // DeploySpec

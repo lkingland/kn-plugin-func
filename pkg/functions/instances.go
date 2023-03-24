@@ -19,18 +19,21 @@ var (
 	ErrMismatchedName      = errors.New("name passed does not match name of the function at root")
 )
 
-// Instances manager
+// InstanceRefs manager
 //
-// Instances are point-in-time snapshots of a function's runtime state in
+// InstanceRefs are point-in-time snapshots of a function's runtime state in
 // a given environment.  By default 'local' and 'remote' environmnts are
 // available when a function is run locally and deployed (respectively).
-type Instances struct {
+//
+// These are references to instances from a client.  For the actual structure
+// used during the runtime by function middleware, see the Instance struct.
+type InstanceRefs struct {
 	client *Client
 }
 
-// newInstances creates a new manager of instances.
-func newInstances(client *Client) *Instances {
-	return &Instances{client: client}
+// newInstaceRefs creates a new manager of instance references.
+func newInstaceRefs(client *Client) *InstanceRefs {
+	return &InstanceRefs{client: client}
 }
 
 // Get the instance data for a function in the named environment.
@@ -38,7 +41,7 @@ func newInstances(client *Client) *Instances {
 // see the Local and Remote methods, respectively.
 // Instance returned is populated with a point-in-time snapshot of the
 // function state in the named environment.
-func (s *Instances) Get(ctx context.Context, f Function, environment string) (Instance, error) {
+func (s *InstanceRefs) Get(ctx context.Context, f Function, environment string) (InstanceRef, error) {
 	switch environment {
 	case EnvironmentLocal:
 		return s.Local(ctx, f)
@@ -47,14 +50,14 @@ func (s *Instances) Get(ctx context.Context, f Function, environment string) (In
 	default:
 		// Future versions will support additional ad-hoc named environments, such
 		// as for testing. Local and remote remaining the base cases.
-		return Instance{}, ErrEnvironmentNotFound
+		return InstanceRef{}, ErrEnvironmentNotFound
 	}
 }
 
 // Local instance details for the function
 // If the function is not running locally the error returned is ErrNotRunning
-func (s *Instances) Local(ctx context.Context, f Function) (Instance, error) {
-	var i Instance
+func (s *InstanceRefs) Local(ctx context.Context, f Function) (InstanceRef, error) {
+	var i InstanceRef
 	// To create a local instance the function must have a root path defined
 	// which contains an initialized function and be running.
 	if f.Root == "" {
@@ -70,7 +73,7 @@ func (s *Instances) Local(ctx context.Context, f Function) (Instance, error) {
 
 	route := fmt.Sprintf("http://localhost:%s/", ports[0])
 
-	return Instance{
+	return InstanceRef{
 		Route:  route,
 		Routes: []string{route},
 		Name:   f.Name,
@@ -84,7 +87,7 @@ func (s *Instances) Local(ctx context.Context, f Function) (Instance, error) {
 // either name or root path can be passed.  If name is not passed, the function
 // at root is loaded and its name used for describing the remote instance.
 // Name takes precedence.
-func (s *Instances) Remote(ctx context.Context, name, root string) (Instance, error) {
+func (s *InstanceRefs) Remote(ctx context.Context, name, root string) (InstanceRef, error) {
 	var (
 		f   Function
 		err error
@@ -98,10 +101,10 @@ func (s *Instances) Remote(ctx context.Context, name, root string) (Instance, er
 	if name != "" && root != "" {
 		f, err = NewFunction(root)
 		if err != nil {
-			return Instance{}, err
+			return InstanceRef{}, err
 		}
 		if name != f.Name {
-			return Instance{}, errors.New("name passed does not match name of the function at root")
+			return InstanceRef{}, errors.New("name passed does not match name of the function at root")
 		}
 	}
 
@@ -110,14 +113,14 @@ func (s *Instances) Remote(ctx context.Context, name, root string) (Instance, er
 		f = Function{Name: name}
 	} else {
 		if f, err = NewFunction(root); err != nil {
-			return Instance{}, err
+			return InstanceRef{}, err
 		}
 	}
 
 	// If the function has no name, it is not deployed and thus has no remote
 	// instances
 	if f.Name == "" {
-		return Instance{}, nil
+		return InstanceRef{}, nil
 	}
 
 	return s.client.describer.Describe(ctx, f.Name)

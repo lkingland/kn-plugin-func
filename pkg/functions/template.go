@@ -7,7 +7,28 @@ import (
 	"knative.dev/func/pkg/filesystem"
 )
 
-// template
+// Template is a function project template.
+// It can be used to instantiate new function project example source code and
+// later a function project's scaffolding.
+type Template interface {
+	// Name of this template.
+	Name() string
+	// Runtime for which this template applies.
+	Runtime() string
+	// Repository within which this template is contained.  Value is set to the
+	// currently effective name of the repository, which may vary. It is user-
+	// defined when the repository is added, and can be set to "default" when
+	// the client is loaded in single repo mode. I.e. not canonical.
+	Repository() string
+	// Fullname is a calculated field of [repo]/[name] used
+	// to uniquely reference a template which may share a name
+	// with one in another repository.
+	Fullname() string
+	// Write updates fields of function f and writes project files to path pointed by f.Root.
+	Write(ctx context.Context, f *Function) error
+}
+
+// template default implementation
 type template struct {
 	name       string
 	runtime    string
@@ -32,6 +53,8 @@ func (t template) Fullname() string {
 	return t.repository + "/" + t.name
 }
 
+// Write the template source files
+// (all source code except manifest.yaml and scaffolding)
 func (t template) Write(ctx context.Context, f *Function) error {
 
 	// Apply fields from the template onto the function itself (Denormalize).
@@ -58,10 +81,13 @@ func (t template) Write(ctx context.Context, f *Function) error {
 		f.Invoke = t.config.Invoke
 	}
 
-	isManifest := func(p string) bool {
+	mask := func(p string) bool {
 		_, f := path.Split(p)
 		return f == templateManifest
 	}
 
-	return filesystem.CopyFromFS(".", f.Root, filesystem.NewMaskingFS(isManifest, t.fs)) // copy everything but manifest.yaml
+	// For template source writes, write everything except manifest.yaml and
+	// scaffolding.
+	// copy everything but manifest.yaml
+	return filesystem.CopyFromFS(".", f.Root, filesystem.NewMaskingFS(mask, t.fs))
 }

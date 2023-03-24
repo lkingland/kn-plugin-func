@@ -15,14 +15,15 @@ import (
 const (
 	Pack    = "pack"
 	S2I     = "s2i"
-	Default = Pack
+	OCI     = "oci"
+	Default = Pack // TODO: hopefully make this OCI when it's fully baked.
 )
 
 // Known builder names with a pretty-printed string representation
 type Known []string
 
 func All() Known {
-	return Known([]string{Pack, S2I})
+	return Known([]string{Pack, S2I, OCI})
 }
 
 func (k Known) String() string {

@@ -8,16 +8,16 @@ import (
 
 type Describer struct {
 	DescribeInvoked bool
-	DescribeFn      func(string) (fn.Instance, error)
+	DescribeFn      func(string) (fn.InstanceRef, error)
 }
 
 func NewDescriber() *Describer {
 	return &Describer{
-		DescribeFn: func(string) (fn.Instance, error) { return fn.Instance{}, nil },
+		DescribeFn: func(string) (fn.InstanceRef, error) { return fn.InstanceRef{}, nil },
 	}
 }
 
-func (l *Describer) Describe(_ context.Context, name string) (fn.Instance, error) {
+func (l *Describer) Describe(_ context.Context, name string) (fn.InstanceRef, error) {
 	l.DescribeInvoked = true
 	return l.DescribeFn(name)
 }

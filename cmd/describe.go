@@ -135,7 +135,7 @@ func (c describeConfig) Validate(cmd *cobra.Command) (err error) {
 // Output Formatting (serializers)
 // -------------------------------
 
-type info fn.Instance
+type info fn.InstanceRef
 
 func (i info) Human(w io.Writer) error {
 	fmt.Fprintln(w, "Function name:")

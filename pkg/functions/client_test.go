@@ -1508,7 +1508,7 @@ func TestClient_Instances(t *testing.T) {
 	}
 
 	// Get the local function instance info
-	instance, err := client.Instances().Local(context.Background(), f)
+	instance, err := client.InstanceRefs().Local(context.Background(), f)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1652,4 +1652,8 @@ func TestClient_BuiltDetects(t *testing.T) {
 	if fn.Built(root) {
 		t.Fatal("client did not detect a removed file as indicating build staleness")
 	}
+}
+
+// TestClient_ScaffoldingOptinal ensures that scaffolding code is not necessary
+func TestClient_ScaffoldingOptional(t *testing.T) {
 }

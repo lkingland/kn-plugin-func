@@ -31,6 +31,7 @@ DESCRIPTION
 	  --------     --------
 	  go           cloudevents
 	  go           http
+	  go           scaffolding
 	  node         cloudevents
 	  node         http
 	  python       cloudevents

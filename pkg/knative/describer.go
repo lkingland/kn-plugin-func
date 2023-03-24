@@ -27,11 +27,11 @@ func NewDescriber(namespaceOverride string, verbose bool) *Describer {
 // restricts to label-syntax, which is thus escaped. Therefore as a knative (kube) implementation
 // detal proper full names have to be escaped on the way in and unescaped on the way out. ex:
 // www.example-site.com -> www-example--site-com
-func (d *Describer) Describe(ctx context.Context, name string) (description fn.Instance, err error) {
+func (d *Describer) Describe(ctx context.Context, name string) (description fn.InstanceRef, err error) {
 	if d.namespace == "" {
 		d.namespace, err = k8s.GetNamespace(d.namespace)
 		if err != nil {
-			return fn.Instance{}, err
+			return fn.InstanceRef{}, err
 		}
 	}
 

@@ -106,7 +106,7 @@ func invoke(ctx context.Context, c *Client, f Function, target string, m InvokeM
 func invocationRoute(ctx context.Context, c *Client, f Function, target string) (string, error) {
 	// TODO: this function has code-smell;  will de-smellify it in next pass.
 	if target == EnvironmentLocal {
-		instance, err := c.Instances().Get(ctx, f, target)
+		instance, err := c.InstanceRefs().Get(ctx, f, target)
 		if err != nil {
 			if errors.Is(err, ErrEnvironmentNotFound) {
 				return "", errors.New("not running locally")
@@ -116,7 +116,7 @@ func invocationRoute(ctx context.Context, c *Client, f Function, target string) 
 		return instance.Route, nil
 
 	} else if target == EnvironmentRemote {
-		instance, err := c.Instances().Get(ctx, f, target)
+		instance, err := c.InstanceRefs().Get(ctx, f, target)
 		if err != nil {
 			if errors.Is(err, ErrEnvironmentNotFound) {
 				return "", errors.New("not running in remote")
@@ -126,14 +126,14 @@ func invocationRoute(ctx context.Context, c *Client, f Function, target string) 
 		return instance.Route, nil
 
 	} else if target == "" { // target blank, check local first then remote.
-		instance, err := c.Instances().Get(ctx, f, EnvironmentLocal)
+		instance, err := c.InstanceRefs().Get(ctx, f, EnvironmentLocal)
 		if err != nil && !errors.Is(err, ErrNotRunning) {
 			return "", err // unexpected errors are anything other than ErrNotRunning
 		}
 		if err == nil {
 			return instance.Route, nil // found instance in local environment
 		}
-		instance, err = c.Instances().Get(ctx, f, EnvironmentRemote)
+		instance, err = c.InstanceRefs().Get(ctx, f, EnvironmentRemote)
 		if errors.Is(err, ErrNotRunning) {
 			return "", errors.New("not running locally or in the remote")
 		}

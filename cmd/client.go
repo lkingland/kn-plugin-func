@@ -58,11 +58,6 @@ func NewTestClient(options ...fn.Option) ClientFactory {
 // commands entirely to mock for testing. Note the returned cleanup function.
 // 'Namespace' is optional.  If not provided (see DefaultNamespace commentary),
 // the currently configured is used.
-// 'Verbose' indicates the system should write out a higher amount of logging.
-// Example:
-//
-//	client, done := NewClient("",false)
-//	defer done()
 func NewClient(cfg ClientConfig, options ...fn.Option) (*fn.Client, func()) {
 	var (
 		p  = progress.New(cfg.Verbose)               // updates the CLI

@@ -54,34 +54,14 @@ type Repository struct {
 	uri string // URI which was used when initially creating
 }
 
-// Runtime is a division of templates within a repository of templates for a
+// Runtime is a division of within a repository templates for a
 // given runtime (source language plus environmentally available services
-// and libraries)
+// and libraries) and potentially scaffolding.
 type Runtime struct {
 	// Name of the runtime
 	Name string
 	// Templates defined for the runtime
 	Templates []Template
-}
-
-// Template is a function project template.
-// It can be used to instantiate new function project.
-type Template interface {
-	// Name of this template.
-	Name() string
-	// Runtime for which this template applies.
-	Runtime() string
-	// Repository within which this template is contained.  Value is set to the
-	// currently effective name of the repository, which may vary. It is user-
-	// defined when the repository is added, and can be set to "default" when
-	// the client is loaded in single repo mode. I.e. not canonical.
-	Repository() string
-	// Fullname is a calculated field of [repo]/[name] used
-	// to uniquely reference a template which may share a name
-	// with one in another repository.
-	Fullname() string
-	// Write updates fields of function f and writes project files to path pointed by f.Root.
-	Write(ctx context.Context, f *Function) error
 }
 
 // This structure defines defaults for a function when generating project by a template.Write().
@@ -534,6 +514,36 @@ func (r *Repository) Write(dest string) (err error) {
 		fs = filesystem.NewBillyFilesystem(wt.Filesystem)
 	}
 	return filesystem.CopyFromFS(".", dest, fs)
+}
+
+// Write scaffolding code to the given path
+//
+// Scaffolding is a language-level operation which first detects the method
+// signature used by the function's source code and then writes the
+// appropriate scaffolding.
+//
+// NOTE: Scaffoding is not per-template, because a template is merely an
+// example starting point for a Function implementation and should have no
+// bearing on the shape that function can eventually take.  The language,
+// and optionally invocation hint (For cloud events) are used for this.  For
+// example, there can be multiple templates which exemplify a given method
+// signature, and the implementation can be switched at any time by the author.
+// Language, by contrast, is fixed at time of initialization.
+func (r *Repository) WriteScaffolding(ctx context.Context, f Function, s Signature, dest string) error {
+	if r.fs == nil {
+		return errors.New("repository has no filesystem")
+	}
+
+	fs := r.fs // The FS to copy
+
+	// NOTE
+	// Unlike writing the full filesystem to disk, we should not need to create
+	// a local clone becase we do not need the .git directory.
+
+	// TODO: scaffolding not required.  Return a typed error such that it can
+	// be ignored by the caller.
+
+	return filesystem.CopyFromFS(filepath.Join(f.Runtime, "scaffolding", s.String()), dest, fs)
 }
 
 // URL attempts to read the remote git origin URL of the repository.  Best

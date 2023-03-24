@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"syscall"
 	"time"
 
 	"knative.dev/func/pkg/utils"
@@ -34,7 +36,28 @@ const (
 	// existence indicates the function has been built, and whose content is
 	// a fingerprint of the filesystem at the time of the build.
 	buildstamp = "built"
+
+	// keepfle is the name of the file in build directories whose existence
+	// indicates the final build source should be kept after the build completes
+	// for debugging etc.  Build source is usually transient and removed after
+	// the final container is created.
+	keepfile = "func-keep"
 )
+
+// Signauture defines the scaffolding code necessary to expose a function as
+// a service.
+type Signature int
+
+const (
+	StaticHTTP Signature = iota
+	StaticCloudEvent
+	InstancedHTTP
+	InstancedCloudEvent
+)
+
+func (s Signature) String() string {
+	return []string{"static-http", "static-cloudevent", "instanced-http", "instanced-cloudevent"}[s]
+}
 
 // Client for managing function instances.
 type Client struct {
@@ -53,7 +76,7 @@ type Client struct {
 	progressListener  ProgressListener  // progress listener
 	repositories      *Repositories     // Repositories management
 	templates         *Templates        // Templates management
-	instances         *Instances        // Function Instances management
+	instances         *InstanceRefs     // Function Instance Reference management
 	transport         http.RoundTripper // Customizable internal transport
 	pipelinesProvider PipelinesProvider // CI/CD pipelines management
 }
@@ -135,6 +158,8 @@ type ProgressListener interface {
 	SetTotal(int)
 	// Increment to the next step with the given message.
 	Increment(message string)
+	// Update the text of the current step to be the given message.
+	Update(message string)
 	// Complete signals completion, which is expected to be somewhat different
 	// than a step increment.
 	Complete(message string)
@@ -150,19 +175,19 @@ type ProgressListener interface {
 // Describer of function instances
 type Describer interface {
 	// Describe the named function in the remote environment.
-	Describe(ctx context.Context, name string) (Instance, error)
+	Describe(ctx context.Context, name string) (InstanceRef, error)
 }
 
-// Instance data about the runtime state of a function in a given environment.
+// InstanceRef data about the runtime state of a function in a given environment.
 //
 // A function instance is a logical running function space, which share
 // a unique route (or set of routes).  Due to autoscaling and load balancing,
 // there is a one to many relationship between a given route and processes.
 // By default the system creates the 'local' and 'remote' named instances
 // when a function is run (locally) and deployed, respectively.
-// See the .Instances(f) accessor for the map of named environments to these
+// See the .InstanceRefs(f) accessor for the map of named environments to these
 // function information structures.
-type Instance struct {
+type InstanceRef struct {
 	// Route is the primary route of a function instance.
 	Route string
 	// Routes is the primary route plus any other route at which the function
@@ -217,7 +242,7 @@ func New(options ...Option) *Client {
 	// Initialize sub-managers using now-fully-initialized client.
 	c.repositories = newRepositories(c)
 	c.templates = newTemplates(c)
-	c.instances = newInstances(c)
+	c.instances = newInstaceRefs(c)
 
 	return c
 }
@@ -372,8 +397,8 @@ func (c *Client) Templates() *Templates {
 	return c.templates
 }
 
-// Instances accessor
-func (c *Client) Instances() *Instances {
+// InstanceRefs is an accessor to the Function Instance references.
+func (c *Client) InstanceRefs() *InstanceRefs {
 	return c.instances
 }
 
@@ -574,9 +599,6 @@ func (c *Client) Init(cfg Function) (err error) {
 	}
 
 	// Write out the new function's Template files.
-	// Templates contain values which may result in the function being mutated
-	// (default builders, etc), so a new (potentially mutated) function is
-	// returned from Templates.Write
 	err = c.Templates().Write(&f)
 	if err != nil {
 		return
@@ -634,12 +656,31 @@ func ensureRuntimeDir(f Function) error {
 
 }
 
+type buildOptions struct {
+	keepOutput bool
+}
+type buildOption func(f *buildOptions)
+
+// WithBuildKeepOutput indicates that the files used to generate a container
+// when building should be retained in the .func/builds/ID directory upon
+// completion (whether success or failure).
+func WithBuildKeepOutput(b bool) buildOption {
+	return func(o *buildOptions) {
+		o.keepOutput = b
+	}
+}
+
 // Build the function at path. Errors if the function is either unloadable or does
 // not contain a populated Image.
-func (c *Client) Build(ctx context.Context, path string) (err error) {
-	c.progressListener.Increment("Building function image")
+func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err error) {
+	c.progressListener.Increment("Setting up build")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	options := buildOptions{}
+	for _, o := range oo {
+		o(&options)
+	}
 	// If not logging verbosely, the ongoing progress of the build will not
 	// be streaming to stdout, and the lack of activity has been seen to cause
 	// users to prematurely exit due to the sluggishness of pulling large images
@@ -667,7 +708,47 @@ func (c *Client) Build(ctx context.Context, path string) (err error) {
 		}
 	}
 
+	// Set up Build Directory
+	// - Clean up old builds
+	// - Create new build diretory
+	// - Write Scaffolding
+	// - Link the Scaffolding to the function source code
+	hash, err := fingerprint(f)
+	if err = cleanupBuildDirectories(f.Root, c.verbose); err != nil {
+		return
+	}
+	buildDir, err := createBuildDirectory(f.Root, hash, options.keepOutput, c.verbose)
+	if err != nil {
+		return
+	}
+	if err = c.Scaffold(ctx, f, buildDir); err != nil {
+		return
+	}
+	linkTarget, err := filepath.Rel(buildDir, f.Root)
+	if err != nil {
+		return fmt.Errorf("error determining relative path to function source %w", err)
+	}
+	_ = os.Remove(filepath.Join(buildDir, "f"))
+	if err = os.Symlink(linkTarget, filepath.Join(buildDir, "f")); err != nil {
+		return fmt.Errorf("error linking scaffolding to function source %w", err)
+	}
+
+	// Build the Function using the configured builder
+	c.progressListener.Increment("Starting builder")
+	// TODO:
 	if err = c.builder.Build(ctx, f); err != nil {
+		return
+	}
+
+	// Remove the old last build
+	// and link the new one
+	lastLink := filepath.Join(f.Root, RunDataDir, "builds", "last")
+	lastTarget := filepath.Join(".", "by-hash", hash)
+	_ = os.RemoveAll(lastLink)
+	if err = os.Symlink(lastTarget, lastLink); err != nil {
+		return
+	}
+	if err = cleanupBuildDirectories(f.Root, c.verbose); err != nil {
 		return
 	}
 
@@ -684,12 +765,157 @@ func (c *Client) Build(ctx context.Context, path string) (err error) {
 
 	// TODO: create a status structure and return it here for optional
 	// use by the cli for user echo (rather than rely on verbose mode here)
-	message := fmt.Sprintf("🙌 Function image built: %v", f.Image)
+	message := fmt.Sprintf("🙌 Function built: %v", f.Image)
 	if runtime.GOOS == "windows" {
-		message = fmt.Sprintf("Function image built: %v", f.Image)
+		message = fmt.Sprintf("Function built: %v", f.Image)
 	}
 	c.progressListener.Increment(message)
 	return
+}
+
+// Scaffold writes the functions's scaffolding to path.
+func (c *Client) Scaffold(ctx context.Context, f Function, dest string) (err error) {
+	// First get a reference to the repository containing the scaffolding to use
+	//
+	// TODO: In order to support extensible scaffolding from external repositories,
+	// Retain the repository reference from which a Function was initialized
+	// in order to re-read out its scaffolding later.  This can be the locally-
+	// installed repository name or the remote reference URL.  There are benefits
+	// and detriments either way.  A third option would be to store the
+	// scaffolding locally, but this also has downsides.
+	//
+	//  If function creatd from a local repository named:
+	//     repo = repoFromURL(f.RepoURL)
+	//  If function created from a remote reference:
+	//    c.Repositories().Get(f.RepoName)
+	//  If function not created from an external repository:
+	repo, err := c.Repositories().Get(DefaultRepositoryName)
+	if err != nil {
+		return
+	}
+
+	// Detect the method signature
+	s, err := detectSignature(f)
+	if err != nil {
+		return
+	}
+
+	// Write Scaffolding from the Repository into the destination
+	return repo.WriteScaffolding(ctx, f, s, dest)
+}
+
+func detectSignature(f Function) (Signature, error) {
+	return StaticHTTP, nil
+}
+
+type BuildErr struct {
+	Err error
+}
+
+func (e BuildErr) Error() string {
+	return e.Error()
+}
+
+func cleanupBuildDirectories(root string, verbose bool) (err error) {
+	// For each build directory files
+	//    Keep if it's not a directory (readme etc.)
+	//    Keep if it has a keepfile
+	//    Keep if it is the last known successful build
+	byhash := filepath.Join(root, RunDataDir, "builds", "by-hash")
+	dd, _ := os.ReadDir(byhash)
+	for _, d := range dd {
+		if !d.IsDir() {
+			fmt.Printf("not removing regular file %q\n", d.Name())
+			continue
+		}
+		keep := filepath.Join(byhash, d.Name(), keepfile)
+		if _, err := os.Stat(keep); !os.IsNotExist(err) {
+			fmt.Printf("not removing due to keepfile %q\n", d.Name())
+			continue
+		}
+		last := filepath.Join(root, RunDataDir, "builds", "last")
+		if _, err := os.Stat(last); err == nil {
+			buildDir, err := filepath.EvalSymlinks(last)
+			if err == nil && filepath.Base(buildDir) == d.Name() {
+				// the link exists and the basename of its taret matches
+				fmt.Printf("not removing last build %q\n", buildDir)
+				continue
+			}
+		}
+		buildDir := filepath.Join(byhash, d.Name())
+		if verbose {
+			fmt.Printf("rm -rf %v\n", buildDir)
+		}
+		if err = os.RemoveAll(buildDir); err != nil {
+			return
+		}
+	}
+
+	// For each pid link
+	//   Remove if it is a symlink whose target is gone
+	//   Remove if is the current PID's build (restarting)
+	bypid := filepath.Join(root, RunDataDir, "builds", "by-pid")
+	dd, _ = os.ReadDir(bypid)
+	for _, d := range dd {
+		link := filepath.Join(bypid, d.Name())
+		if _, err := filepath.EvalSymlinks(link); os.IsNotExist(err) {
+			if err = os.RemoveAll(link); err != nil {
+				return err
+			}
+		}
+	}
+	return
+}
+
+func createBuildDirectory(root string, hash string, keep, verbose bool) (dir string, err error) {
+	// mkdir .func/builds/by-hash/$HASH
+	dir = filepath.Join(root, RunDataDir, "builds", "by-hash", hash)
+	if verbose {
+		fmt.Printf("mkdir -p %v\n", dir)
+	}
+	if _, err = os.Stat(dir); !os.IsNotExist(err) {
+		// cleanupBuildDirectories should have removed partially-completed build dirs.
+		// Its existence here indicates it is active or current.
+		return dir, BuildErr{fmt.Errorf("build directory already exists: %v", dir)}
+	}
+	if err = os.MkdirAll(dir, fs.ModePerm); err != nil {
+		return
+	}
+
+	// touch ./func/builds/by-hash/$HASH/func-keep
+	if keep {
+		keep := filepath.Join(dir, keepfile)
+		if verbose {
+			fmt.Printf("touch %v\n", keep)
+		}
+		if err = os.WriteFile(keep, []byte{}, 0644); err != nil {
+			return dir, BuildErr{fmt.Errorf("unable to create keepfile '%v': %w", keepfile, err)}
+		}
+	}
+
+	bypid := filepath.Join(RunDataDir, "builds", "by-pid")
+	if verbose {
+		fmt.Printf("mkdir %v\n", bypid)
+	}
+	if err = os.MkdirAll(bypid, 0744); err != nil {
+		return
+	}
+	// ln -s ../by-hash/$HASH .func/builds/by-pid/$PID
+	pid := os.Getpid()
+	link := filepath.Join(bypid, strconv.Itoa(pid))
+	target := filepath.Join("..", "by-hash", hash)
+	err = os.Symlink(target, link)
+	if verbose {
+		fmt.Printf("ln -s %v %v\n", target, link)
+	}
+
+	return
+}
+
+func processExists(pid int) bool {
+	p, _ := os.FindProcess(pid)
+	err := p.Signal(syscall.Signal(0))
+	return err == nil
 }
 
 func (c *Client) printBuildActivity(ctx context.Context) {
@@ -879,7 +1105,7 @@ func (c *Client) Route(ctx context.Context, path string) (route string, err erro
 	}
 
 	// Return the correct route.
-	instance, err := c.Instances().Remote(ctx, "", path)
+	instance, err := c.InstanceRefs().Remote(ctx, "", path)
 	if err != nil {
 		return
 	}
@@ -919,7 +1145,7 @@ func (c *Client) Run(ctx context.Context, root string) (job *Job, err error) {
 
 // Describe a function.  Name takes precedence.  If no name is provided,
 // the function defined at root is used.
-func (c *Client) Describe(ctx context.Context, name, root string) (d Instance, err error) {
+func (c *Client) Describe(ctx context.Context, name, root string) (d InstanceRef, err error) {
 	go func() {
 		<-ctx.Done()
 		c.progressListener.Stopping()
@@ -1185,8 +1411,8 @@ func (n *noopLister) List(context.Context) ([]ListItem, error) { return []ListIt
 // Describer
 type noopDescriber struct{ output io.Writer }
 
-func (n *noopDescriber) Describe(context.Context, string) (Instance, error) {
-	return Instance{}, nil
+func (n *noopDescriber) Describe(context.Context, string) (InstanceRef, error) {
+	return InstanceRef{}, nil
 }
 
 // PipelinesProvider
@@ -1208,6 +1434,7 @@ type NoopProgressListener struct{}
 
 func (p *NoopProgressListener) SetTotal(i int)     {}
 func (p *NoopProgressListener) Increment(m string) {}
+func (p *NoopProgressListener) Update(m string)    {}
 func (p *NoopProgressListener) Complete(m string)  {}
 func (p *NoopProgressListener) Stopping()          {}
 func (p *NoopProgressListener) Done()              {}

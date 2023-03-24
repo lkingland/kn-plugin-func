@@ -13,11 +13,12 @@ import (
 	"knative.dev/client/pkg/util"
 
 	"knative.dev/func/pkg/builders"
-	"knative.dev/func/pkg/builders/buildpacks"
-	"knative.dev/func/pkg/builders/s2i"
+	pack "knative.dev/func/pkg/builders/buildpacks" // TODO: this should be func/pkg/pack (organize by dependency not category)
+	"knative.dev/func/pkg/builders/s2i"             // TODO: this should be func/pkg/s2i (organize by dependency, not category)
 	"knative.dev/func/pkg/config"
 	fn "knative.dev/func/pkg/functions"
 	"knative.dev/func/pkg/k8s"
+	"knative.dev/func/pkg/oci"
 )
 
 func NewDeployCmd(newClient ClientFactory) *cobra.Command {
@@ -32,7 +33,7 @@ SYNOPSIS
 	{{rootCmdUse}} deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-	             [--platform] [-c|--confirm] [-v|--verbose]
+							 [--keep] [--platform] [-c|--confirm] [-v|--verbose]
 
 DESCRIPTION
 
@@ -116,7 +117,7 @@ EXAMPLES
 
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
-		PreRunE:    bindEnv("confirm", "env", "git-url", "git-branch", "git-dir", "remote", "build", "builder", "builder-image", "image", "registry", "push", "platform", "namespace", "path", "verbose"),
+		PreRunE:    bindEnv("confirm", "build", "builder", "builder-image", "env", "git-branch", "git-dir", "git-url", "image", "keep", "namespace", "path", "platform", "push", "registry", "remote", "verbose"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeploy(cmd, newClient)
 		},
@@ -176,6 +177,8 @@ EXAMPLES
 		"Push the function image to registry before deploying. (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "",
 		"Optionally specify a specific platform to build for (e.g. linux/amd64). (Env: $FUNC_PLATFORM)")
+	cmd.Flags().BoolP("keep", "", false,
+		"If building, keep the final genereatd files used to create the image (kept in the .func/builds directory) (Env: $FUNC_KEEP)")
 
 	// Oft-shared flags:
 	addConfirmFlag(cmd, cfg.Confirm)
@@ -239,23 +242,28 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 
 	// Client
 	// Concrete implementations (ex builder) vary  based on final effective cfg.
-	var builder fn.Builder
-	if f.Build.Builder == builders.Pack {
-		builder = buildpacks.NewBuilder(
-			buildpacks.WithName(builders.Pack),
-			buildpacks.WithVerbose(cfg.Verbose))
+	o := []fn.Option{}
+
+	if f.Build.Builder == builders.OCI {
+		o = append(o,
+			fn.WithBuilder(oci.NewBuilder(builders.OCI, cfg.Verbose)),
+			fn.WithPusher(oci.NewPusher(cfg.Verbose)))
+	} else if f.Build.Builder == builders.Pack {
+		o = append(o,
+			fn.WithBuilder(pack.NewBuilder(
+				pack.WithName(builders.Pack),
+				pack.WithVerbose(cfg.Verbose))))
 	} else if f.Build.Builder == builders.S2I {
-		builder = s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithPlatform(cfg.Platform),
-			s2i.WithVerbose(cfg.Verbose))
+		o = append(o,
+			fn.WithBuilder(s2i.NewBuilder(
+				s2i.WithName(builders.S2I),
+				s2i.WithPlatform(cfg.Platform),
+				s2i.WithVerbose(cfg.Verbose))))
 	} else {
 		return builders.ErrUnknownBuilder{Name: f.Build.Builder, Known: KnownBuilders()}
 	}
 
-	client, done := newClient(ClientConfig{Namespace: f.Deploy.Namespace, Verbose: cfg.Verbose},
-		fn.WithRegistry(cfg.Registry),
-		fn.WithBuilder(builder))
+	client, done := newClient(ClientConfig{Namespace: f.Deploy.Namespace, Verbose: cfg.Verbose}, o...)
 	defer done()
 
 	// Deploy
@@ -267,7 +275,7 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 		}
 	} else {
 		if shouldBuild(cfg.Build, f, client) { // --build or "auto" with FS changes
-			if err = client.Build(cmd.Context(), f.Root); err != nil {
+			if err = client.Build(cmd.Context(), f.Root, fn.WithBuildKeepOutput(cfg.Keep)); err != nil {
 				return
 			}
 		}
@@ -380,6 +388,10 @@ type deployConfig struct {
 	// Remote indicates the deployment (and possibly build) process are to
 	// be triggered in a remote environment rather than run locally.
 	Remote bool
+
+	// Keep the files around which were used to convert the function into a
+	// process, and placed within the container for debugging/introspection.
+	Keep bool
 }
 
 // newDeployConfig creates a buildConfig populated from command flags and
@@ -394,6 +406,7 @@ func newDeployConfig(cmd *cobra.Command) (c deployConfig) {
 		GitURL:      viper.GetString("git-url"),
 		Namespace:   viper.GetString("namespace"),
 		Remote:      viper.GetBool("remote"),
+		Keep:        viper.GetBool("keep"),
 	}
 	// NOTE: .Env shold be viper.GetStringSlice, but this returns unparsed
 	// results and appears to be an open issue since 2017:
