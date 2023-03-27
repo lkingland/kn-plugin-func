@@ -281,11 +281,24 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 			return
 		}
 	} else {
-		if shouldBuild(cfg.Build, f, client) { // --build or "auto" with FS changes
+		// local build
+		if cfg.Build == "auto" {
+			if fn.Built(f.Root) {
+				fmt.Fprintln(cmd.OutOrStdout(), "function up-to-date.  Force a rebuild with --build")
+			} else {
+				if err = client.Build(cmd.Context(), f.Root, fn.WithBuildKeepOutput(cfg.Keep)); err != nil {
+					return
+				}
+			}
+		} else if build, _ := strconv.ParseBool(cfg.Build); build == true {
 			if err = client.Build(cmd.Context(), f.Root, fn.WithBuildKeepOutput(cfg.Keep)); err != nil {
 				return
 			}
+		} else {
+			// This condition checked during validation
+			return fmt.Errorf("--build (FUNC_BUILD) value %q not recognized.  Must be 'auto' or a truthy value.", cfg.Build)
 		}
+
 		if f, err = fn.NewFunction(f.Root); err != nil { // TODO: remove when client API uses 'f'
 			return
 		}

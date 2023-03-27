@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -139,11 +138,12 @@ func newBuildConfig(ctx context.Context, f fn.Function, v bool) (cfg buildConfig
 	return
 }
 
+// the build directory is the current build directory for this process.
 func getBuildDir(f fn.Function) (string, error) {
-	dir := filepath.Join(f.Root, fn.RunDataDir, "builds", "by-pid", strconv.Itoa(os.Getpid()))
+	dir := filepath.Join(f.Root, fn.RunDataDir, "builds", "last")
 	dir = filepath.Clean(dir)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return dir, fmt.Errorf("process build directory not found '%v'. Was it built by another process or removed?", dir)
+		return dir, fmt.Errorf("process build directory not found '%v'. Has it been built?", dir)
 	}
 	return dir, nil
 }
