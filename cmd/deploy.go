@@ -218,7 +218,7 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 		return
 	}
 
-	// TODO: this is duplicate logic with runBuild.
+	// TODO: this is duplicate logic with runBuild and should be in .Configure
 	// Refactor both to have this logic part of creating the buildConfig and thus
 	// shared because newDeployConfig uses newBuildConfig for its embedded struct.
 	if f.Registry != "" && !cmd.Flags().Changed("image") && strings.Index(f.Image, "/") > 0 && !strings.HasPrefix(f.Image, f.Registry) {
@@ -230,6 +230,13 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 		updImg := prfx + sps[len(sps)-1]
 		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: function has current image '%s' which has a different registry than the currently configured registry '%s'. The new image tag will be '%s'.  To use an explicit image, use --image.\n", f.Image, f.Registry, updImg)
 		f.Image = updImg
+	}
+
+	// Save the function which has now been updated with flags/config
+	// Write will write unless the fuction has changed, thus not dirtying the
+	// work tree and triggering a rebuild when --build=auto (default)
+	if err = f.Write(); err != nil {
+		return
 	}
 
 	// Informative non-error messages regarding the final deployment request
@@ -290,13 +297,9 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 		if err = client.Deploy(cmd.Context(), f.Root, fn.WithDeploySkipBuildCheck(cfg.Build == "false")); err != nil {
 			return
 		}
-		if f, err = fn.NewFunction(f.Root); err != nil { // TODO: remove when client API uses 'f'
-			return
-		}
 	}
 
-	// mutations persisted on success
-	return f.Write()
+	return
 }
 
 // shouldBuild returns true if the value of the build option is a truthy value,
@@ -442,9 +445,12 @@ func (c deployConfig) Configure(f fn.Function) (fn.Function, error) {
 	// ImageDigest
 	// Parsed off f.Image if provided.  Deploying adds the ability to specify a
 	// digest on the associated image (not available on build as nonsensical).
-	f.ImageDigest, err = imageDigest(f.Image)
+	newDigest, err := imageDigest(f.Image)
 	if err != nil {
 		return f, err
+	}
+	if newDigest != "" {
+		f.ImageDigest = newDigest
 	}
 
 	// Envs

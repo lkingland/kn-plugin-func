@@ -458,6 +458,7 @@ func (c *Client) Apply(ctx context.Context, f Function) (route string, err error
 //
 // Updates a function which has already been initialized to run the latest
 // source code.
+// Builds if necessary.
 //
 // Use Init, Build, Push and Deploy independently for lower level control.
 // Returns final primary route to the Function and any errors.
@@ -619,7 +620,7 @@ func updateBuildStamp(f Function) (err error) {
 	if err = ensureRuntimeDir(f); err != nil {
 		return err
 	}
-	hash, err := fingerprint(f)
+	hash, err := fingerprint(f.Root)
 	if err != nil {
 		return err
 	}
@@ -713,7 +714,7 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	// - Create new build diretory
 	// - Write Scaffolding
 	// - Link the Scaffolding to the function source code
-	hash, err := fingerprint(f)
+	hash, err := fingerprint(f.Root)
 	if err = cleanupBuildDirectories(f.Root, c.verbose); err != nil {
 		return
 	}
@@ -1309,7 +1310,7 @@ func Built(path string) bool {
 	}
 
 	// Calculate the function's Filesystem hash and see if it has changed.
-	hash, err := fingerprint(f)
+	hash, err := fingerprint(f.Root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error calculating function's fingerprint: %v\n", err)
 		return false
@@ -1343,17 +1344,30 @@ func buildStamp(path string) string {
 
 // fingerprint returns a hash of the filenames and modification timestamps of
 // the files within a function's root.
-func fingerprint(f Function) (string, error) {
+func fingerprint(root string) (hash string, err error) {
 	h := sha256.New()
-	err := filepath.Walk(f.Root, func(path string, info fs.FileInfo, err error) error {
+	// Create the build stamp log
+	log, err := os.Create(filepath.Join(RunDataDir, "built.log"))
+	if err != nil {
+		return hash, err
+	}
+
+	err = filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if path == root {
+			return nil
 		}
 		// Always ignore .func, .git (TODO: .funcignore)
 		if info.IsDir() && (info.Name() == RunDataDir || info.Name() == ".git") {
 			return filepath.SkipDir
 		}
-		fmt.Fprintf(h, "%v:%v:", path, info.ModTime().UnixNano())
+		// Write to the Log
+		fmt.Fprintf(log, "%v:%v\n", path, info.ModTime().UnixNano())
+
+		// Write to the Hasher
+		fmt.Fprintf(h, "%v:%v\n", path, info.ModTime().UnixNano())
 		return nil
 	})
 	return fmt.Sprintf("%x", h.Sum(nil)), err
