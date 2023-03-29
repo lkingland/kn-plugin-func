@@ -79,8 +79,7 @@ func NewBuilder(name string, verbose bool) *Builder {
 	}
 }
 
-// Build  an OCI Mult-arch (ImageIndex) container for the function into
-// this process' build directory.
+// Build  an OCI Mult-arch (ImageIndex) container
 func (b *Builder) Build(ctx context.Context, f fn.Function) (err error) {
 	cfg, err := newBuildConfig(ctx, f, b.verbose)
 	if err != nil {

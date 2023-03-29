@@ -107,27 +107,28 @@ func (n *Runner) Run(ctx context.Context, f fn.Function) (job *fn.Job, err error
 	}
 
 	// Stopper
-	stop := func() {
+	stop := func() error {
 		var (
 			timeout = DefaultStopTimeout
 			ctx     = context.Background()
 		)
 		if err = c.ContainerStop(ctx, id, &timeout); err != nil {
-			fmt.Fprintf(os.Stderr, "error stopping container %v: %v\n", id, err)
+			return fmt.Errorf("error stopping container %v: %w\n", id, err)
 		}
 		if err = c.ContainerRemove(ctx, id, types.ContainerRemoveOptions{}); err != nil {
-			fmt.Fprintf(os.Stderr, "error removing container %v: %v\n", id, err)
+			return fmt.Errorf("error removing container %v: %w\n", id, err)
 		}
 		if err = conn.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "error closing connection to container: %v\n", err)
+			return fmt.Errorf("error closing connection to container: %w\n", err)
 		}
 		if err = c.Close(); err != nil {
-			fmt.Fprintf(os.Stderr, "error closing daemon client: %v\n", err)
+			return fmt.Errorf("error closing daemon client: %w\n", err)
 		}
+		return nil
 	}
 
 	// Job reporting port, runtime errors and provides a mechanism for stopping.
-	return fn.NewJob(f, port, runtimeErrCh, stop)
+	return fn.NewJob(f, port, runtimeErrCh, stop, n.verbose)
 }
 
 // Dial the given (tcp) port on the given interface, returning an error if it is

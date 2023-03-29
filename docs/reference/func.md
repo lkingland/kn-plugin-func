@@ -34,7 +34,7 @@ Learn more about Knative at: https://knative.dev
 * [func languages](func_languages.md)	 - List available function language runtimes
 * [func list](func_list.md)	 - List deployed functions
 * [func repository](func_repository.md)	 - Manage installed template repositories
-* [func run](func_run.md)	 - Run the function locally
+* [func run](func_run.md)	 - Run a function locally
 * [func templates](func_templates.md)	 - List available function source templates
 * [func version](func_version.md)	 - Function client version information
 

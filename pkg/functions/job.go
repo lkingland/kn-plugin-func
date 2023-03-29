@@ -1,6 +1,7 @@
 package functions
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,56 +13,51 @@ type Job struct {
 	Function Function
 	Port     string
 	Errors   chan error
-	onStop   func()
+	onStop   func() error
+	verbose  bool
 }
 
 // Create a new Job which represents a running function task by providing
 // the port on which it was started, a channel on which runtime errors can
 // be received, and a stop function.
-func NewJob(f Function, port string, errs chan error, onStop func()) (*Job, error) {
+func NewJob(f Function, port string, errs chan error, onStop func() error, verbose bool) (*Job, error) {
 	j := &Job{
 		Function: f,
 		Port:     port,
 		Errors:   errs,
 		onStop:   onStop,
+		verbose:  verbose,
 	}
-	return j, j.save() // Everything is a file:  save instance data to disk.
+	if j.Port == "" {
+		return j, errors.New("port required to create job")
+	}
+	// mkdir -p ${f.Root}/.func/runs/${j.Port}
+	if verbose {
+		fmt.Printf("mkdir -p %v\n", j.Dir())
+	}
+	return j, os.MkdirAll(j.Dir(), os.ModePerm)
 }
 
 // Stop the Job, running the provided stop delegate and removing runtime
 // metadata from disk.
-func (j *Job) Stop() {
-	_ = j.remove() // Remove representation on disk
-	j.onStop()
+func (j *Job) Stop() error {
+	if j.verbose {
+		fmt.Printf("rm %v\n", j.Dir())
+	}
+	err := j.remove() // Remove representation on disk
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: error removing run directory. %v", err)
+	}
+	return j.onStop()
 }
 
-func (j *Job) save() error {
-	instancesDir := filepath.Join(j.Function.Root, RunDataDir, "instances")
-	// job metadata is stored in <root>/.func/instances
-	if err := os.MkdirAll(instancesDir, os.ModePerm); err != nil {
-		return err
-	}
-
-	// create a file <root>/.func/instances/<port>
-	file, err := os.Create(filepath.Join(instancesDir, j.Port))
-	if err != nil {
-		return err
-	}
-	return file.Close()
-
-	// Store the effective port for use by other client instances, possibly
-	// in other processes, such as to run Invoke from other terminal in CLI apps.
-	/*
-		if err := writeFunc(f, "port", []byte(port)); err != nil {
-			return j, err
-		}
-		return j, nil
-	*/
+// Dir is ${f.Root}/.func/runs/${j.Port}
+func (j *Job) Dir() string {
+	return filepath.Join(j.Function.Root, RunDataDir, "runs", j.Port)
 }
 
 func (j *Job) remove() error {
-	filename := filepath.Join(j.Function.Root, RunDataDir, "instances", j.Port)
-	return os.Remove(filename)
+	return os.RemoveAll(j.Dir())
 }
 
 // jobPorts returns all the ports on which an instance of the given function is
@@ -72,19 +68,20 @@ func jobPorts(f Function) []string {
 	if f.Root == "" || !f.Initialized() {
 		return []string{}
 	}
-	instancesDir := filepath.Join(f.Root, RunDataDir, "instances")
-	if _, err := os.Stat(instancesDir); err != nil {
+	runsDir := filepath.Join(f.Root, RunDataDir, "runs")
+	if _, err := os.Stat(runsDir); err != nil {
 		return []string{} // never started, so path does not exist
 	}
 
-	files, err := os.ReadDir(instancesDir)
+	fis, err := os.ReadDir(runsDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading %v", instancesDir)
+		fmt.Fprintf(os.Stderr, "error reading %v", runsDir)
 		return []string{}
 	}
 	ports := []string{}
-	for _, f := range files {
+	for _, f := range fis {
 		ports = append(ports, f.Name())
 	}
+	// TODO: validate it's a directory whose name parses as an integer?
 	return ports
 }

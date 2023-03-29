@@ -226,7 +226,6 @@ func New(options ...Option) *Client {
 		builder:           &noopBuilder{output: os.Stdout},
 		pusher:            &noopPusher{output: os.Stdout},
 		deployer:          &noopDeployer{output: os.Stdout},
-		runner:            &noopRunner{output: os.Stdout},
 		remover:           &noopRemover{output: os.Stdout},
 		lister:            &noopLister{output: os.Stdout},
 		describer:         &noopDescriber{output: os.Stdout},
@@ -235,6 +234,7 @@ func New(options ...Option) *Client {
 		pipelinesProvider: &noopPipelinesProvider{},
 		transport:         http.DefaultTransport,
 	}
+	c.runner = newDefaultRunner(c, os.Stdout, os.Stderr)
 	for _, o := range options {
 		o(c)
 	}
@@ -703,6 +703,7 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	// Image name is stored on the function for later use by deploy, etc.
 	// TODO: write this to .func/build instead, and populate f.Image on deploy
 	// such that local builds do not dirty the work tree.
+	// Note that the same logic exists in .Run()
 	if f.Image == "" {
 		if f.Image, err = f.ImageName(); err != nil {
 			return
@@ -712,9 +713,11 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	// Set up Build Directory
 	// - Clean up old builds
 	// - Create new build diretory
-	// - Write Scaffolding
-	// - Link the Scaffolding to the function source code
+	// - Write Scaffolding (includes linking 'f' to function source)
 	hash, err := fingerprint(f.Root)
+	if err != nil {
+		return
+	}
 	if err = cleanupBuildDirectories(f.Root, c.verbose); err != nil {
 		return
 	}
@@ -724,14 +727,6 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	}
 	if err = c.Scaffold(ctx, f, buildDir); err != nil {
 		return
-	}
-	linkTarget, err := filepath.Rel(buildDir, f.Root)
-	if err != nil {
-		return fmt.Errorf("error determining relative path to function source %w", err)
-	}
-	_ = os.Remove(filepath.Join(buildDir, "f"))
-	if err = os.Symlink(linkTarget, filepath.Join(buildDir, "f")); err != nil {
-		return fmt.Errorf("error linking scaffolding to function source %w", err)
 	}
 
 	// Build the Function using the configured builder
@@ -774,7 +769,8 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	return
 }
 
-// Scaffold writes the functions's scaffolding to path.
+// Scaffold writes the functions's scaffolding to path. along with updating
+// the symlink 'f' to function's root.
 func (c *Client) Scaffold(ctx context.Context, f Function, dest string) (err error) {
 	// First get a reference to the repository containing the scaffolding to use
 	//
@@ -802,7 +798,21 @@ func (c *Client) Scaffold(ctx context.Context, f Function, dest string) (err err
 	}
 
 	// Write Scaffolding from the Repository into the destination
-	return repo.WriteScaffolding(ctx, f, s, dest)
+	if err = repo.WriteScaffolding(ctx, f, s, dest); err != nil {
+		return
+	}
+
+	// Replace the 'f' link of the scaffolding (which is now incorrect) to
+	// link to the function's root.
+	src, err := filepath.Rel(dest, f.Root)
+	if err != nil {
+		return fmt.Errorf("error determining relative path to function source %w", err)
+	}
+	_ = os.Remove(filepath.Join(dest, "f"))
+	if err = os.Symlink(src, filepath.Join(dest, "f")); err != nil {
+		return fmt.Errorf("error linking scaffolding to function source %w", err)
+	}
+	return
 }
 
 func detectSignature(f Function) (Signature, error) {
@@ -1113,13 +1123,23 @@ func (c *Client) Route(ctx context.Context, path string) (route string, err erro
 	return instance.Route, nil
 }
 
+type runOptions struct {
+	keepOutput bool
+}
+type runOption func(f *runOptions)
+
 // Run the function whose code resides at root.
 // On start, the chosen port is sent to the provided started channel
-func (c *Client) Run(ctx context.Context, root string) (job *Job, err error) {
+func (c *Client) Run(ctx context.Context, root string, oo ...runOption) (job *Job, err error) {
 	go func() {
 		<-ctx.Done()
 		c.progressListener.Stopping()
 	}()
+
+	options := runOptions{}
+	for _, o := range oo {
+		o(&options)
+	}
 
 	// Load the function
 	f, err := NewFunction(root)

@@ -4,169 +4,118 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"os"
 
 	"github.com/ory/viper"
 	"github.com/spf13/cobra"
-	"knative.dev/client/pkg/util"
 
-	"knative.dev/func/pkg/builders"
-	"knative.dev/func/pkg/builders/buildpacks"
-	"knative.dev/func/pkg/builders/s2i"
 	"knative.dev/func/pkg/config"
+	"knative.dev/func/pkg/docker"
 	fn "knative.dev/func/pkg/functions"
 )
 
 func NewRunCmd(newClient ClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
-		Short: "Run the function locally",
-		Long: `Run the function locally
+		Short: "Run a function locally",
+		Long: `
+NAME
+	{{rootCmdUse}} run - Run a function locally
 
-Runs the function locally in the current directory or in the directory
-specified by --path flag.
+SYNOPSIS
+	{{rootCmdUse}} run [-t|--container] [-v|--verbose] [-p|--path]
 
-Building
-By default the function will be built if never built, or if changes are detected
-to the function's source.  Use --build to override this behavior.
-Also a builder strategy (pack, s2i) can be chosen using the --builder option.
-Default builder is pack.
+DESCRIPTION
+	Run the function locally either on the host (default) or from within its
+	container.
 
-`,
-		Example: `
-# Run the function locally, building if necessary
-{{rootCmdUse}} run
+	Containerized Runs
+	  The --container flag indicates that the function's container shuould be
+	  run rather than running the source code directly.  This may require that
+	  the funciton's container first be rebuilt, and is required if the function
+	  has not been built yet:
+	    $ func build && func run --container
 
-# Run the function locally, building if necessary, with --builder option
-{{rootCmdUse}} run --builder s2i
+	Process Scaffolding
+	  When running a function, either within a container or on the host, the
+	  function code is first wrapped in code which presents it as a process.
+	  This "scaffolding" is transient, written for each build or run, and should
+	  in most cases be transparent to a function author.  However, to customize,
+	  or even completely replace this scafolding code, see the 'scaffold'
+	  subcommand.
 
-# Run the function, forcing a rebuild of the image.
-#   This is useful when the function's image was manually deleted, necessitating
-#   A rebuild even when no changes have been made the function's source.
-{{rootCmdUse}} run --build
+EXAMPLES
 
-# Run the function, forcing a rebuild of the image with --builder option.
-{{rootCmdUse}} run --build --builder s2i
+	o Run the function locally on the host with no containerization.
+	  $ {{rootCmdUse}} run
 
-# Run the function's existing image, disabling auto-build.
-#   This is useful when filesystem changes have been made, but one wishes to
-#   run the previously built image without rebuilding.
-{{rootCmdUse}} run --build=false
-
+	o Run the function locally from within its container.
+	  {{rootCmdUse}} build && {{rootCmdUse}} run --container
 `,
 		SuggestFor: []string{"rnu"},
-		PreRunE:    bindEnv("build", "path", "builder", "registry", "verbose"),
+		PreRunE:    bindEnv("path", "container", "verbose"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRun(cmd, args, newClient)
 		},
 	}
 
+	// Global Config
 	cfg, err := config.NewDefault()
 	if err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
 
-	cmd.Flags().StringArrayP("env", "e", []string{},
-		"Environment variable to set in the form NAME=VALUE. "+
-			"You may provide this flag multiple times for setting multiple environment variables. "+
-			"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
-	cmd.Flags().StringP("build", "b", "auto", "Build the function. [auto|true|false].")
-	cmd.Flags().Lookup("build").NoOptDefVal = "true" // --build is equivalient to --build=true
-	cmd.Flags().StringP("builder", "", cfg.Builder,
-		fmt.Sprintf("Builder to use when creating the function's container. Currently supported builders are %s. (Env: $FUNC_BUILDER)", KnownBuilders()))
-	cmd.Flags().StringP("registry", "r", "", "Registry + namespace part of the image if building, ex 'quay.io/myuser' (Env: $FUNC_REGISTRY)")
+	// Function Context
+	f, _ := fn.NewFunction(effectivePath())
+	if f.Initialized() {
+		cfg = cfg.Apply(f)
+	}
+
+	// Flags
+	cmd.Flags().BoolP("container", "t", false, "Run the function in a container. ($FUNC_CONTAINER)")
 	addPathFlag(cmd)
 	addVerboseFlag(cmd, cfg.Verbose)
-
-	// Tab Completion
-	if err := cmd.RegisterFlagCompletionFunc("builder", CompleteBuilderList); err != nil {
-		fmt.Println("internal: error while calling RegisterFlagCompletionFunc: ", err)
-	}
 
 	return cmd
 }
 
 func runRun(cmd *cobra.Command, args []string, newClient ClientFactory) (err error) {
-	cfg, err := newRunConfig(cmd)
+	cfg := newRunConfig(cmd)
+	f, err := fn.NewFunction(cfg.Path)
 	if err != nil {
 		return
 	}
+	f = cfg.Configure(f)
 
-	function, err := fn.NewFunction(cfg.Path)
-	if err != nil {
-		return
-	}
-	if !function.Initialized() {
-		return fmt.Errorf("the given path '%v' does not contain an initialized function", cfg.Path)
-	}
-	var updated int
-	function.Run.Envs, updated, err = mergeEnvs(function.Run.Envs, cfg.EnvToUpdate, cfg.EnvToRemove)
-	if err != nil {
-		return
-	}
-	if updated > 0 {
-		err = function.Write()
-		if err != nil {
-			return
+	// Client
+	// Containerized runs require a docker runner instead of the default
+	// host-based runner, and that the functoin already has been built.
+	var client *fn.Client
+	var done func()
+	if cfg.Container {
+		if !fn.Built(f.Root) {
+			return errors.New("Unable to run the function's container.  Has it been built? For example 'func build && func run'.")
 		}
-	}
-
-	// Concrete implementations (ex builder) vary based on final effective config
-	var builder fn.Builder
-	if cfg.Builder == builders.Pack {
-		builder = buildpacks.NewBuilder(
-			buildpacks.WithName(builders.Pack),
-			buildpacks.WithVerbose(cfg.Verbose))
-	} else if cfg.Builder == builders.S2I {
-		builder = s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithVerbose(cfg.Verbose))
+		client, done = newClient(ClientConfig{Verbose: cfg.Verbose},
+			fn.WithRunner(docker.NewRunner(cfg.Verbose, os.Stdout, os.Stderr)))
 	} else {
-		return builders.ErrUnknownBuilder{Name: cfg.Builder, Known: KnownBuilders()}
+		client, done = newClient(ClientConfig{Verbose: cfg.Verbose})
 	}
-
-	// Client for use running (and potentially building), using the config
-	// gathered plus any additional option overrieds (such as for providing
-	// mocks when testing for builder and runner)
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, fn.WithRegistry(cfg.Registry), fn.WithBuilder(builder))
 	defer done()
 
-	// Build?
-	// If --build was set to 'auto', only build if client detects the function
-	// is stale (has either never been built or has had filesystem modifications
-	// since the last build).
-	if cfg.Build == "auto" {
-		if !fn.Built(function.Root) {
-			if err = client.Build(cmd.Context(), cfg.Path); err != nil {
-				return
-			}
-		}
-		fmt.Println("Function already built.  Use --build to force a rebuild.")
-		// Otherwise, --build should parse to a truthy value which indicates an explicit
-		// override.
-	} else {
-		build, err := strconv.ParseBool(cfg.Build)
-		if err != nil {
-			return fmt.Errorf("unrecognized value for --build '%v'.  accepts 'auto', 'true' or 'false' (or similarly truthy value)", build)
-		}
-		if build {
-			if err = client.Build(cmd.Context(), cfg.Path); err != nil {
-				return err
-			}
-		} else {
-			fmt.Println("Function build disabled.")
-		}
-
+	// Reload due to possible changes during configure
+	if f, err = fn.NewFunction(f.Root); err != nil {
+		return
 	}
 
-	// Run the function at path
+	// Run
 	job, err := client.Run(cmd.Context(), cfg.Path)
 	if err != nil {
 		return
 	}
-	defer job.Stop()
+	defer job.Stop() // noop for host-runners (subprocesses)
 
-	fmt.Fprintf(cmd.OutOrStderr(), "Function started on port %v\n", job.Port)
+	fmt.Fprintf(cmd.OutOrStderr(), "Running on port %v\n", job.Port)
 
 	select {
 	case <-cmd.Context().Done():
@@ -180,43 +129,33 @@ func runRun(cmd *cobra.Command, args []string, newClient ClientFactory) (err err
 }
 
 type runConfig struct {
+	// Globals (verbose, etc)
+	config.Global
+
 	// Path of the function implementation on local disk. Defaults to current
 	// working directory of the process.
 	Path string
 
-	// Verbose logging.
-	Verbose bool
-
-	// Envs passed via cmd to be added/updated
-	EnvToUpdate *util.OrderedMap
-
-	// Envs passed via cmd to removed
-	EnvToRemove []string
-
-	// Perform build.  Acceptable values are the keyword 'auto', or a truthy
-	// value such as 'true', 'false, '1' or '0'.
-	Build string
-
-	// Builder strategy if building
-	Builder string
-
-	// Registry for the build tag if building
-	Registry string
+	// Container indicates the funciton should be run in its container
+	Container bool
 }
 
-func newRunConfig(cmd *cobra.Command) (cfg runConfig, err error) {
-	envToUpdate, envToRemove, err := envFromCmd(cmd)
-	if err != nil {
-		return
+func newRunConfig(cmd *cobra.Command) (cfg runConfig) {
+	return runConfig{
+		Global: config.Global{
+			Verbose: viper.GetBool("verbose"),
+		},
+		Path:      viper.GetString("path"),
+		Container: viper.GetBool("container"),
 	}
-	cfg = runConfig{
-		Build:       viper.GetString("build"),
-		Path:        viper.GetString("path"),
-		Verbose:     viper.GetBool("verbose"), // defined on root
-		Builder:     viper.GetString("builder"),
-		Registry:    viper.GetString("registry"),
-		EnvToUpdate: envToUpdate,
-		EnvToRemove: envToRemove,
-	}
-	return
 }
+
+func (c runConfig) Configure(f fn.Function) fn.Function {
+	return c.Global.Configure(f)
+	// path and container are not part of function state, so are not mentioned
+	// in Configure
+}
+
+// TODO: .Prompt()
+// Add --configure flag, help text and invoke .Prompt() in runRun
+// Implementation should confirm verbosity, path and container

@@ -12,7 +12,7 @@ SYNOPSIS
 	func deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-							 [--keep] [--platform] [-c|--confirm] [-v|--verbose]
+	             [--keep] [--platform] [-c|--confirm] [-v|--verbose]
 
 DESCRIPTION
 
@@ -116,7 +116,7 @@ func deploy
       --keep                    If building, keep the final genereatd files used to create the image (kept in the .func/builds directory) (Env: $FUNC_KEEP)
   -n, --namespace string        Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. (Env: $FUNC_NAMESPACE)
   -p, --path string             Path to the function.  Default is current directory (Env: $FUNC_PATH)
-      --platform string         Optionally specify a specific platform to build for (e.g. linux/amd64). (Env: $FUNC_PLATFORM)
+      --platform string         Optionally specify a specific platform to build for (S2I builder only) (e.g. linux/amd64). (Env: $FUNC_PLATFORM)
   -u, --push                    Push the function image to registry before deploying. (Env: $FUNC_PUSH) (default true)
   -r, --registry string         Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. (Env: $FUNC_REGISTRY)
       --remote                  Trigger a remote deployment.  Default is to deploy and build from the local system (Env: $FUNC_REMOTE)

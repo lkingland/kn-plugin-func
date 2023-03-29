@@ -33,7 +33,7 @@ SYNOPSIS
 	{{rootCmdUse}} deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-							 [--keep] [--platform] [-c|--confirm] [-v|--verbose]
+	             [--keep] [--platform] [-c|--confirm] [-v|--verbose]
 
 DESCRIPTION
 
@@ -176,7 +176,7 @@ EXAMPLES
 	cmd.Flags().BoolP("push", "u", true,
 		"Push the function image to registry before deploying. (Env: $FUNC_PUSH)")
 	cmd.Flags().StringP("platform", "", "",
-		"Optionally specify a specific platform to build for (e.g. linux/amd64). (Env: $FUNC_PLATFORM)")
+		"Optionally specify a specific platform to build for (S2I builder only) (e.g. linux/amd64). (Env: $FUNC_PLATFORM)")
 	cmd.Flags().BoolP("keep", "", false,
 		"If building, keep the final genereatd files used to create the image (kept in the .func/builds directory) (Env: $FUNC_KEEP)")
 
@@ -299,32 +299,26 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 			return fmt.Errorf("--build (FUNC_BUILD) value %q not recognized.  Must be 'auto' or a truthy value.", cfg.Build)
 		}
 
-		if f, err = fn.NewFunction(f.Root); err != nil { // TODO: remove when client API uses 'f'
+		// Reload
+		// TODO: remove when .Build returns f
+		if f, err = fn.NewFunction(f.Root); err != nil {
 			return
 		}
+
+		// Push
 		if cfg.Push {
 			if err = client.Push(cmd.Context(), f.Root); err != nil {
 				return
 			}
 		}
+
+		// Deploy
 		if err = client.Deploy(cmd.Context(), f.Root, fn.WithDeploySkipBuildCheck(cfg.Build == "false")); err != nil {
 			return
 		}
 	}
 
 	return
-}
-
-// shouldBuild returns true if the value of the build option is a truthy value,
-// or if it is the literal "auto" and the function reports as being currently
-// unbuilt.  Invalid errors are not reported as this is the purview of
-// deployConfig.Validate
-func shouldBuild(buildCfg string, f fn.Function, client *fn.Client) bool {
-	if buildCfg == "auto" {
-		return !fn.Built(f.Root) // first build or modified filesystem
-	}
-	build, _ := strconv.ParseBool(buildCfg)
-	return build
 }
 
 func NewRegistryValidator(path string) survey.Validator {
@@ -405,8 +399,9 @@ type deployConfig struct {
 	// be triggered in a remote environment rather than run locally.
 	Remote bool
 
-	// Keep the files around which were used to convert the function into a
-	// process, and placed within the container for debugging/introspection.
+	// Keep files which were used to convert the function into a process, and
+	// placed within the container
+	// (only pertinent for host builds)
 	Keep bool
 }
 
