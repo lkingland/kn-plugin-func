@@ -7,5 +7,5 @@ import (
 )
 
 func main() {
-	http.Start(http.DefaultHandler{f.Handle})
+	http.Start(f.New())
 }
