@@ -15,7 +15,7 @@ func TestHandle(t *testing.T) {
 		res *http.Response
 	)
 
-	f.New().Handle(context.Background(), w, req)
+	New().Handle(context.Background(), w, req)
 	res = w.Result()
 	defer res.Body.Close()
 
