@@ -12,8 +12,8 @@ SYNOPSIS
 	func run [-t|--container] [-v|--verbose] [-p|--path]
 
 DESCRIPTION
-
-Runs the function locally.
+	Run the function locally either on the host (default) or from within its
+	container.
 
 	Containerized Runs
 	  The --container flag indicates that the function's container shuould be
@@ -46,11 +46,10 @@ func run
 ### Options
 
 ```
-      --build string[="true"]   Build the function. [auto|true|false]. (Env: $FUNC_BUILD) (default "auto")
-  -t, --container               Run the function in a container. (Env: $FUNC_CONTAINER)
-  -h, --help                    help for run
-  -p, --path string             Path to the function.  Default is current directory (Env: $FUNC_PATH)
-  -v, --verbose                 Print verbose logs ($FUNC_VERBOSE)
+  -t, --container     Run the function in a container. ($FUNC_CONTAINER)
+  -h, --help          help for run
+  -p, --path string   Path to the function.  Default is current directory ($FUNC_PATH)
+  -v, --verbose       Print verbose logs ($FUNC_VERBOSE)
 ```
 
 ### SEE ALSO

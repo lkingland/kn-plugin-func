@@ -72,8 +72,8 @@ EXAMPLES
 		fmt.Fprintf(cmd.OutOrStdout(), "error loading config at '%v'. %v\n", config.File(), err)
 	}
 
-	cmd.Flags().Bool("json", false, "Set output to JSON format. (Env: $FUNC_JSON)")
-	cmd.Flags().StringP("repository", "r", "", "URI to a specific repository to consider (Env: $FUNC_REPOSITORY)")
+	cmd.Flags().Bool("json", false, "Set output to JSON format. ($FUNC_JSON)")
+	cmd.Flags().StringP("repository", "r", "", "URI to a specific repository to consider ($FUNC_REPOSITORY)")
 	addVerboseFlag(cmd, cfg.Verbose)
 
 	return cmd

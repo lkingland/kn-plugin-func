@@ -30,7 +30,7 @@ func config git set
   -h, --help                       help for set
   -i, --image string               Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)
   -n, --namespace string           Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. (Env: $FUNC_NAMESPACE)
-  -p, --path string                Path to the function.  Default is current directory (Env: $FUNC_PATH)
+  -p, --path string                Path to the function.  Default is current directory ($FUNC_PATH)
   -r, --registry string            Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. (Env: $FUNC_REGISTRY)
   -v, --verbose                    Print verbose logs ($FUNC_VERBOSE)
 ```
