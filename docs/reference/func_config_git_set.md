@@ -24,14 +24,14 @@ func config git set
       --config-remote              Configure remote resources (webhook on the Git provider side).
       --gh-access-token string     GitHub Personal Access Token. For public repositories the scope is 'public_repo', for private is 'repo'. If you want to configure the webhook automatically, 'admin:repo_hook' is needed as well. Get more details: https://pipelines-as-code.pages.dev/docs/install/github_webhook/.
       --gh-webhook-secret string   GitHub Webhook Secret used for payload validation. If not specified, it will be generated automatically.
-  -t, --git-branch string          Git revision (branch) to be used when deploying via the Git repository (Env: $FUNC_GIT_BRANCH)
-  -d, --git-dir string             Directory in the Git repository containing the function (default is the root) (Env: $FUNC_GIT_DIR)
-  -g, --git-url string             Repository url containing the function to build (Env: $FUNC_GIT_URL)
+  -t, --git-branch string          Git revision (branch) to be used when deploying via the Git repository ($FUNC_GIT_BRANCH)
+  -d, --git-dir string             Directory in the Git repository containing the function (default is the root) ($FUNC_GIT_DIR)
+  -g, --git-url string             Repository url containing the function to build ($FUNC_GIT_URL)
   -h, --help                       help for set
-  -i, --image string               Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. (Env: $FUNC_IMAGE)
-  -n, --namespace string           Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. (Env: $FUNC_NAMESPACE)
+  -i, --image string               Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)
+  -n, --namespace string           Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. ($FUNC_NAMESPACE)
   -p, --path string                Path to the function.  Default is current directory ($FUNC_PATH)
-  -r, --registry string            Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. (Env: $FUNC_REGISTRY)
+  -r, --registry string            Container registry + registry namespace. (ex 'ghcr.io/myuser').  The full image name is automatically determined using this along with function name. ($FUNC_REGISTRY)
   -v, --verbose                    Print verbose logs ($FUNC_VERBOSE)
 ```
 
