@@ -659,7 +659,7 @@ func WithBuildKeepOutput(b bool) buildOption {
 // Build the function at path. Errors if the function is either unloadable or does
 // not contain a populated Image.
 func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err error) {
-	c.progressListener.Increment("Setting up build")
+	// c.progressListener.Increment("Setting up build")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -715,8 +715,7 @@ func (c *Client) Build(ctx context.Context, path string, oo ...buildOption) (err
 	}
 
 	// Build the Function using the configured builder
-	c.progressListener.Increment("Starting builder")
-	// TODO:
+	// c.progressListener.Increment("Starting builder")
 	if err = c.builder.Build(ctx, f); err != nil {
 		return
 	}

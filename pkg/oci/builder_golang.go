@@ -19,7 +19,7 @@ import (
 
 // TODO: generalize to a single newExec which takes a set of exec files for
 // the given language and move this back into builder.go
-func newExecLayerGo(cfg buildConfig, p v1.Platform) (desc v1.Descriptor, layer v1.Layer, err error) {
+func newExecLayerGo(cfg buildConfig, p v1.Platform, verbose bool) (desc v1.Descriptor, layer v1.Layer, err error) {
 	// Create a temporary tarfile
 	tarPath := filepath.Join(cfg.buildDir, fmt.Sprintf("execlayer.%v.%v.tar.gz", p.OS, p.Architecture))
 	if cfg.verbose {
@@ -33,7 +33,7 @@ func newExecLayerGo(cfg buildConfig, p v1.Platform) (desc v1.Descriptor, layer v
 	tw := tar.NewWriter(gz)
 
 	// Create binary
-	binPath, err := goBuild(cfg, p) // Path to the binary
+	binPath, err := goBuild(cfg, p, verbose) // Path to the binary
 	if err != nil {
 		return
 	}
@@ -104,12 +104,16 @@ func newExecLayerGo(cfg buildConfig, p v1.Platform) (desc v1.Descriptor, layer v
 	return
 }
 
-func goBuild(cfg buildConfig, p v1.Platform) (binPath string, err error) {
+func goBuild(cfg buildConfig, p v1.Platform, verbose bool) (binPath string, err error) {
 	gobin, args, outpath, err := goBuildCmd(p, cfg)
 	if err != nil {
 		return
 	}
-	fmt.Printf("%v %v\n", gobin, strings.Join(args, " "))
+	if verbose {
+		fmt.Printf(" %v\n", gobin, strings.Join(args, " "))
+	} else {
+		fmt.Printf("   %v\n", filepath.Base(outpath))
+	}
 	cmd := exec.CommandContext(cfg.ctx, gobin, args...)
 	cmd.Env = goBuildEnvs(cfg.f, p)
 	cmd.Dir = cfg.buildDir

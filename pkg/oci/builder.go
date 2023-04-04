@@ -86,7 +86,6 @@ func NewBuilder(name string, verbose bool) *Builder {
 
 // Build  an OCI Mult-arch (ImageIndex) container
 func (b *Builder) Build(ctx context.Context, f fn.Function) (err error) {
-	fmt.Println("Builder.Build")
 	cfg, err := newBuildConfig(ctx, f, b.verbose)
 	if err != nil {
 		return
@@ -106,7 +105,7 @@ func (b *Builder) Build(ctx context.Context, f fn.Function) (err error) {
 	// Create an image for each platform
 	imageDescs := []v1.Descriptor{}
 	for _, p := range DefaultPlatforms { // TODO: Configurable additions.
-		imageDesc, err := newImage(cfg, dataDesc, dataLayer, p)
+		imageDesc, err := newImage(cfg, dataDesc, dataLayer, p, b.verbose)
 		if err != nil {
 			return err
 		}
@@ -152,12 +151,10 @@ func getBuildDir(f fn.Function) (dir string, err error) {
 	// Preferentially use the build created by the current process
 	current := filepath.Join(f.Root, fn.RunDataDir, "builds", "by-pid", strconv.Itoa(os.Getpid()))
 	if _, err = os.Stat(current); os.IsNotExist(err) {
-		fmt.Println("Current process build directory not found")
 		// Ignore nonexistence and fall through to last build
 	} else if err != nil {
 		return // Do not ignore other errors such as fs problems
 	} else if err == nil {
-		fmt.Println("Current process build directory found")
 		return current, nil // Found currently in process build; use it.
 	}
 
@@ -276,10 +273,10 @@ func newData(cfg buildConfig) (desc v1.Descriptor, layer v1.Layer, err error) {
 	return
 }
 
-func newImage(cfg buildConfig, dataDesc v1.Descriptor, dataLayer v1.Layer, p v1.Platform) (imageDesc v1.Descriptor, err error) {
+func newImage(cfg buildConfig, dataDesc v1.Descriptor, dataLayer v1.Layer, p v1.Platform, verbose bool) (imageDesc v1.Descriptor, err error) {
 
 	// Write Exec Layer as Blob -> Layer
-	execDesc, execLayer, err := newExec(cfg, p)
+	execDesc, execLayer, err := newExec(cfg, p, verbose)
 	if err != nil {
 		return
 	}
@@ -337,10 +334,10 @@ func newImage(cfg buildConfig, dataDesc v1.Descriptor, dataLayer v1.Layer, p v1.
 	return
 }
 
-func newExec(cfg buildConfig, p v1.Platform) (desc v1.Descriptor, layer v1.Layer, err error) {
+func newExec(cfg buildConfig, p v1.Platform, verbose bool) (desc v1.Descriptor, layer v1.Layer, err error) {
 	switch cfg.f.Runtime {
 	case "go":
-		return newExecLayerGo(cfg, p)
+		return newExecLayerGo(cfg, p, verbose)
 	case "python":
 		// Likely the next to be supported after Go
 		err = errors.New("Python functions are not yet supported by the host builder.")
