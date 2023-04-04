@@ -1,3 +1,6 @@
+// package function is an example of a Function implementation.
+//
+// This package name can be replaced (see go.sum for the module name)
 package function
 
 import (
@@ -7,33 +10,34 @@ import (
 )
 
 // MyFunction is the function provided by this library.
-// There is no restriction as to the actual name of this structure.
+// Any name can be used.
 type MyFunction struct{}
 
 // New constructs an instance of your function.  It is called each time a new
-// instance of the function service is created.  The structure returned need
-// only provide a Handle method (see example below).
+// instance of the function service is created.
 func New() *MyFunction {
 	return &MyFunction{}
 }
 
-// Start your function instance.
-// Provided to this start method are all arguments and environment variables
-// which apply to this function. While this method technically is optional,
-// it is preferable to receive function configuration in this way rather than
-// access them directory for testability, portabiliy, simplicity and robustness.
-func (f *MyFunction) Start(ctx context.Context, args map[string]string) error {
-	fmt.Println("Function Started")
-	return nil
-}
-
 // Handle a request using your funciton instance.
 func (f *MyFunction) Handle(ctx context.Context, res http.ResponseWriter, req *http.Request) {
-	fmt.Println("Function Received Request")
-	fmt.Fprintf(res, "Function Received Request")
+	fmt.Println("Request received")
+	fmt.Fprintf(res, "Request received\n")
 }
 
-// Stop is an optional method which is called whenever a function is stopped.
+// Start is called whenever a function instance is started.
+//
+// Provided to this start method are all arguments and environment variables
+// which apply to this function.  For better function portability, testability
+// and robustness, it is encouraged to use this method for accessing function
+// configuration rather than looking for environment variables or flags.
+// func (f *MyFunction) Start(ctx context.Context, args map[string]string) error {
+//   fmt.Println("Function Started")
+//   return nil
+// }
+
+// Stop is called whenever a function is stopped.
+//
 // This may happen for reasons such as being rescheduled onto a different node,
 // being updated with a newer version, or if the number of function instances
 // is being scaled down due to low load.  This is a good place to cleanup and
@@ -66,6 +70,6 @@ func (f *MyFunction) Handle(ctx context.Context, res http.ResponseWriter, req *h
 // outlined above.  Note that if this method is defined, the system will ignore
 // the instanced function constructor if it is defined.
 //
-// func Handle(ctx context.Context, res http.ResponseWriter, req *http.Request {
+// func Handle(ctx context.Context, res http.ResponseWriter, req *http.Request) {
 //   /* Your Static Handler Code Here */
 // }
