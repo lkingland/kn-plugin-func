@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,6 +39,10 @@ import (
 // explicit.  This could be accomplished either by creating a BuildRequest
 // an BuildResponse struct which includes these things, by passing in
 // as "scaffolder" to the builder's constructor, or some such.
+//
+// By coupling via the current process, it will cause problems if there is
+// a single process running multiple builds, and has to be addressed by
+// throwing an "already building" error.
 //
 // See other punts inline with the "todo" prefix.
 //
@@ -81,6 +86,7 @@ func NewBuilder(name string, verbose bool) *Builder {
 
 // Build  an OCI Mult-arch (ImageIndex) container
 func (b *Builder) Build(ctx context.Context, f fn.Function) (err error) {
+	fmt.Println("Builder.Build")
 	cfg, err := newBuildConfig(ctx, f, b.verbose)
 	if err != nil {
 		return
@@ -137,14 +143,32 @@ func newBuildConfig(ctx context.Context, f fn.Function, v bool) (cfg buildConfig
 	return
 }
 
-// the build directory is the current build directory for this process.
-func getBuildDir(f fn.Function) (string, error) {
-	dir := filepath.Join(f.Root, fn.RunDataDir, "builds", "last")
-	dir = filepath.Clean(dir)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return dir, fmt.Errorf("process build directory not found '%v'. Has it been built?", dir)
+// the build directory is either the currently executing build for this
+// process (for operations which include building such as deployment), or
+// the last build which was successful for operations which do not include
+// building, such as when building is expressly disabled.  Note that in the
+// latter scenario, an error will be generated if there exists no prior build.
+func getBuildDir(f fn.Function) (dir string, err error) {
+	// Preferentially use the build created by the current process
+	current := filepath.Join(f.Root, fn.RunDataDir, "builds", "by-pid", strconv.Itoa(os.Getpid()))
+	if _, err = os.Stat(current); os.IsNotExist(err) {
+		fmt.Println("Current process build directory not found")
+		// Ignore nonexistence and fall through to last build
+	} else if err != nil {
+		return // Do not ignore other errors such as fs problems
+	} else if err == nil {
+		fmt.Println("Current process build directory found")
+		return current, nil // Found currently in process build; use it.
 	}
-	return dir, nil
+
+	// Failing to find the in-progress build, use the last build successfully
+	// completed if it can be found.
+	last := filepath.Join(f.Root, fn.RunDataDir, "builds", "last")
+	if _, err := os.Stat(last); os.IsNotExist(err) {
+		return dir, fmt.Errorf("last build not found '%v'. Has the function been built?", last)
+	}
+	fmt.Println("Last build found")
+	return last, nil
 }
 
 func writeOCILayout(cfg buildConfig) error {
