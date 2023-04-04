@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/lkingland/func-runtimes/go/http"
+	ce "github.com/lkingland/func-runtimes/go/cloudevents"
 
 	f "f"
 )
 
 func main() {
-	if err := http.Start(http.DefaultHandler{f.Handle}); err != nil {
+	if err := ce.Start(f.New()); err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
