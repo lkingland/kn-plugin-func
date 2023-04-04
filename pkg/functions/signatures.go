@@ -38,7 +38,6 @@ func detectSignature(f Function) (Signature, error) {
 	}
 	for k, v := range detectors[f.Runtime] {
 		if v(f.Root) {
-			fmt.Printf("detected signature: %v\n", k)
 			return k, nil
 		}
 	}

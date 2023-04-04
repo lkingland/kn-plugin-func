@@ -352,7 +352,7 @@ func newExec(cfg buildConfig, p v1.Platform) (desc v1.Descriptor, layer v1.Layer
 		err = errors.New("Rust functions are not yet supported by the host builder.")
 	default:
 		// Others are not likely to be supported in the near future
-		err = fmt.Errorf("The language runtime '%v' is not a recognized language by the host builder.")
+		err = fmt.Errorf("The language runtime '%v' is not a recognized language by the host builder.", cfg.f.Runtime)
 	}
 	return
 }

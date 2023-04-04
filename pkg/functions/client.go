@@ -44,21 +44,6 @@ const (
 	keepfile = "func-keep"
 )
 
-// Signauture defines the scaffolding code necessary to expose a function as
-// a service.
-type Signature int
-
-const (
-	StaticHTTP Signature = iota
-	StaticCloudEvent
-	InstancedHTTP
-	InstancedCloudEvent
-)
-
-func (s Signature) String() string {
-	return []string{"static-http", "static-cloudevent", "instanced-http", "instanced-cloudevent"}[s]
-}
-
 // Client for managing function instances.
 type Client struct {
 	repositoriesPath  string            // path to repositories
@@ -815,10 +800,6 @@ func (c *Client) Scaffold(ctx context.Context, f Function, dest string) (err err
 	return
 }
 
-func detectSignature(f Function) (Signature, error) {
-	return StaticHTTP, nil
-}
-
 type BuildErr struct {
 	Err error
 }
@@ -836,12 +817,10 @@ func cleanupBuildDirectories(root string, verbose bool) (err error) {
 	dd, _ := os.ReadDir(byhash)
 	for _, d := range dd {
 		if !d.IsDir() {
-			fmt.Printf("not removing regular file %q\n", d.Name())
 			continue
 		}
 		keep := filepath.Join(byhash, d.Name(), keepfile)
 		if _, err := os.Stat(keep); !os.IsNotExist(err) {
-			fmt.Printf("not removing due to keepfile %q\n", d.Name())
 			continue
 		}
 		last := filepath.Join(root, RunDataDir, "builds", "last")
@@ -849,7 +828,6 @@ func cleanupBuildDirectories(root string, verbose bool) (err error) {
 			buildDir, err := filepath.EvalSymlinks(last)
 			if err == nil && filepath.Base(buildDir) == d.Name() {
 				// the link exists and the basename of its taret matches
-				fmt.Printf("not removing last build %q\n", buildDir)
 				continue
 			}
 		}
