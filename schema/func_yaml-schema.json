@@ -108,6 +108,7 @@
 		"Function": {
 			"required": [
 				"specVersion",
+				"domain",
 				"registry",
 				"image",
 				"created"
@@ -121,6 +122,10 @@
 					"pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
 					"type": "string",
 					"description": "Name of the function."
+				},
+				"domain": {
+					"type": "string",
+					"description": "Domain of the function optionally specifies the domain to use as the\nroute of the function. By default the cluster's default will be used.\nNote that the value defined here must be one which the cluster is\nconfigured to recognize, or this will have no effect and the cluster\ndefault will be applied.  This value shuld therefore ideally be\nvalidated by the client.\n\nMatching a valid domain name using a regular expression can be quite\ncomplex, as there are many rules for domain names. However, below uses\na simplified regular expression that matches most common domain names:\n\n 1 can contain letters (a-z, A-Z), digits (0-9), and hyphens (-).\n 2 cannot start or end with a hyphen.\n 3 Domain name components can be up to 63 characters long.\n 4 The top-level domain (TLD) should have at least two letters and max six.\n\nThis regular expression doesn't cover all possible domain names, as there\nare more complex rules regarding internationalized domain names (IDNs) and\nnew top-level domains (TLDs). Additionally, it does not validate against\nthe list of known TLDs. However, it should work for most common domains."
 				},
 				"runtime": {
 					"type": "string",
