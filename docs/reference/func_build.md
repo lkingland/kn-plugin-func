@@ -10,7 +10,8 @@ NAME
 
 SYNOPSIS
 	func build [-r|--registry] [--builder] [--builder-image] [--push]
-	             [--platform] [-p|--path] [-c|--confirm] [-v|--verbose]
+	             [--platform] [-p|--path] [-c|--confirm] [--insecure-registry]
+	             [-v|--verbose]
 
 DESCRIPTION
 
@@ -25,6 +26,9 @@ DESCRIPTION
 
 	When building a function for the first time, either a registry or explicit
 	image name is required.  Subsequent builds will reuse these option values.
+
+	To push to an insecure registry, such as a local testing registry which
+	is not secured by TLS, use --insecure.
 
 EXAMPLES
 
@@ -60,6 +64,7 @@ func build
   -c, --confirm                Prompt to confirm options interactively ($FUNC_CONFIRM)
   -h, --help                   help for build
   -i, --image string           Full image name in the form [registry]/[namespace]/[name]:[tag] (optional). This option takes precedence over --registry ($FUNC_IMAGE)
+      --insecure-registry      Enable use of an insecure (non-https) registry. Currently ignored during S2I and Pack builds. ($FUNC_INSECURE_REGISTRY)
   -p, --path string            Path to the function.  Default is current directory ($FUNC_PATH)
       --platform string        Optionally specify a target platform, for example "linux/amd64" when using the s2i build strategy
   -u, --push                   Attempt to push the function image to the configured registry after being successfully built

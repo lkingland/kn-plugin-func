@@ -27,7 +27,8 @@ NAME
 
 SYNOPSIS
 	{{rootCmdUse}} build [-r|--registry] [--builder] [--builder-image] [--push]
-	             [--platform] [-p|--path] [-c|--confirm] [-v|--verbose]
+	             [--platform] [-p|--path] [-c|--confirm] [--insecure-registry]
+	             [-v|--verbose]
 
 DESCRIPTION
 
@@ -42,6 +43,9 @@ DESCRIPTION
 
 	When building a function for the first time, either a registry or explicit
 	image name is required.  Subsequent builds will reuse these option values.
+
+	To push to an insecure registry, such as a local testing registry which
+	is not secured by TLS, use --insecure.
 
 EXAMPLES
 
@@ -65,7 +69,7 @@ EXAMPLES
 
 `,
 		SuggestFor: []string{"biuld", "buidl", "built"},
-		PreRunE:    bindEnv("image", "path", "builder", "registry", "confirm", "push", "builder-image", "platform", "verbose"),
+		PreRunE:    bindEnv("image", "path", "builder", "registry", "confirm", "push", "builder-image", "platform", "verbose", "insecure-registry"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runBuild(cmd, args, newClient)
 		},
@@ -114,6 +118,7 @@ EXAMPLES
 		"Attempt to push the function image to the configured registry after being successfully built")
 	cmd.Flags().StringP("platform", "", "",
 		"Optionally specify a target platform, for example \"linux/amd64\" when using the s2i build strategy")
+	cmd.Flags().Bool("insecure-registry", false, "Enable use of an insecure (non-https) registry. Currently ignored during S2I and Pack builds. ($FUNC_INSECURE_REGISTRY)")
 
 	// Oft-shared flags:
 	addConfirmFlag(cmd, cfg.Confirm)
@@ -178,7 +183,7 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	if f.Build.Builder == builders.OCI {
 		o = append(o,
 			fn.WithBuilder(oci.NewBuilder(builders.OCI, cfg.Verbose)),
-			fn.WithPusher(oci.NewPusher(cfg.Verbose)))
+			fn.WithPusher(&oci.Pusher{Insecure: cfg.InsecureRegistry, Verbose: cfg.Verbose}))
 	} else if f.Build.Builder == builders.Pack {
 		o = append(o,
 			fn.WithBuilder(pack.NewBuilder(
@@ -235,6 +240,9 @@ type buildConfig struct {
 
 	// Push the resulting image to the registry after building.
 	Push bool
+
+	// InsecureRegistry indicates auth should be skipped when pushing.
+	InsecureRegistry bool
 }
 
 // newBuildConfig gathers options into a single build request.
@@ -246,11 +254,12 @@ func newBuildConfig() buildConfig {
 			Registry: registry(), // deferred defaulting
 			Verbose:  viper.GetBool("verbose"),
 		},
-		BuilderImage: viper.GetString("builder-image"),
-		Image:        viper.GetString("image"),
-		Path:         viper.GetString("path"),
-		Platform:     viper.GetString("platform"),
-		Push:         viper.GetBool("push"),
+		BuilderImage:     viper.GetString("builder-image"),
+		Image:            viper.GetString("image"),
+		Path:             viper.GetString("path"),
+		Platform:         viper.GetString("platform"),
+		Push:             viper.GetBool("push"),
+		InsecureRegistry: viper.GetBool("insecure-registry"),
 	}
 }
 

@@ -804,7 +804,7 @@ type BuildErr struct {
 }
 
 func (e BuildErr) Error() string {
-	return e.Error()
+	return e.Err.Error()
 }
 
 func cleanupBuildDirectories(root string, verbose bool) (err error) {

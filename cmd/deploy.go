@@ -33,7 +33,8 @@ SYNOPSIS
 	{{rootCmdUse}} deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-	             [--keep] [--platform] [-c|--confirm] [-v|--verbose]
+	             [--keep] [--platform] [-c|--confirm] [--insecure-registry]
+	             [--domain] [-v|--verbose]
 
 DESCRIPTION
 
@@ -49,7 +50,12 @@ DESCRIPTION
 	previously been configured for the function. This registry is also used to
 	determine the final built image tag for the function.  This final image name
 	can be provided explicitly using --image, in which case it is used in place
-	of --registry.
+	of --registry.o
+
+	The optional --domain indicates a specific domain should be used for the
+	route of the deployed function instead of that specified as the default by
+	the cluster.  The domain must be configured as available on the cluster or
+	this setting will have no effect.
 
 	To run deploy using an interactive mode, use the --confirm (-c) option.
 	This mode is useful for the first deployment in particular, since subsdequent
@@ -66,6 +72,9 @@ DESCRIPTION
 	  to disable pushing.  This could be used, for example, to trigger a redeploy
 	  of a service without needing to build, or even have the container available
 	  locally with '{{rootCmdUse}} deploy --build=false --push==false'.
+
+	  To push to an insecure registry, such as a local testing registry which
+	  is not secured by TLS, use --insecure-registry.
 
 	Remote
 	  Building and pushing (deploying) is by default run on localhost.  This
@@ -117,7 +126,7 @@ EXAMPLES
 
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
-		PreRunE:    bindEnv("confirm", "build", "builder", "builder-image", "env", "git-branch", "git-dir", "git-url", "image", "keep", "namespace", "path", "platform", "push", "registry", "remote", "verbose"),
+		PreRunE:    bindEnv("confirm", "build", "builder", "builder-image", "env", "git-branch", "git-dir", "git-url", "image", "keep", "namespace", "path", "platform", "push", "registry", "remote", "verbose", "insecure-registry", "domain"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeploy(cmd, newClient)
 		},
@@ -158,6 +167,8 @@ EXAMPLES
 	cmd.Flags().StringArrayP("env", "e", []string{}, "Environment variable to set in the form NAME=VALUE. "+
 		"You may provide this flag multiple times for setting multiple environment variables. "+
 		"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
+	cmd.Flags().String("domain", f.Domain,
+		"Domain to use for the function's route (ignored if unrecognized) ($FUNC_DOMAIN)")
 	cmd.Flags().StringP("git-url", "g", f.Build.Git.URL,
 		"Repository url containing the function to build ($FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", f.Build.Git.Revision,
@@ -179,6 +190,7 @@ EXAMPLES
 		"Optionally specify a specific platform to build for (S2I builder only) (e.g. linux/amd64). ($FUNC_PLATFORM)")
 	cmd.Flags().BoolP("keep", "", false,
 		"If building, keep the final genereatd files used to create the image (kept in the .func/builds directory) ($FUNC_KEEP)")
+	cmd.Flags().Bool("insecure-registry", false, "Enable use of an insecure (non-https) registry. Currently ignored during S2I and Pack builds. ($FUNC_INSECURE_REGISTRY)")
 
 	// Oft-shared flags:
 	addConfirmFlag(cmd, cfg.Confirm)
@@ -254,7 +266,7 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 	if f.Build.Builder == builders.OCI {
 		o = append(o,
 			fn.WithBuilder(oci.NewBuilder(builders.OCI, cfg.Verbose)),
-			fn.WithPusher(oci.NewPusher(cfg.Verbose)))
+			fn.WithPusher(&oci.Pusher{Insecure: cfg.InsecureRegistry, Verbose: cfg.Verbose}))
 	} else if f.Build.Builder == builders.Pack {
 		o = append(o,
 			fn.WithBuilder(pack.NewBuilder(
@@ -378,6 +390,10 @@ type deployConfig struct {
 	// Env variables.  May include removals using a "-"
 	Env []string
 
+	// Domain to use for the function's route.  Default is to let the cluster
+	// apply its default.
+	Domain string
+
 	// Git branch for remote builds
 	GitBranch string
 
@@ -412,6 +428,7 @@ func newDeployConfig(cmd *cobra.Command) (c deployConfig) {
 		buildConfig: newBuildConfig(),
 		Build:       viper.GetString("build"),
 		Env:         viper.GetStringSlice("env"),
+		Domain:      viper.GetString("domain"),
 		GitBranch:   viper.GetString("git-branch"),
 		GitDir:      viper.GetString("git-dir"),
 		GitURL:      viper.GetString("git-url"),
@@ -444,6 +461,7 @@ func (c deployConfig) Configure(f fn.Function) (fn.Function, error) {
 	f = c.buildConfig.Configure(f) // also configures .buildConfig.Global
 
 	// Configure basic members
+	f.Domain = c.Domain
 	f.Build.Git.URL = c.GitURL
 	f.Build.Git.ContextDir = c.GitDir
 	f.Build.Git.Revision = c.GitBranch // TODO: shouild match; perhaps "refSpec"

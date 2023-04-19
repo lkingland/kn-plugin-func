@@ -114,6 +114,7 @@
 			"required": [
 				"specVersion",
 				"name",
+				"domain",
 				"runtime",
 				"registry",
 				"image",
@@ -128,7 +129,9 @@
 					"type": "string"
 				},
 				"name": {
-					"pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$",
+					"type": "string"
+				},
+				"domain": {
 					"type": "string"
 				},
 				"runtime": {

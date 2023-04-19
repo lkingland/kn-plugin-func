@@ -12,7 +12,8 @@ SYNOPSIS
 	func deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-	             [--keep] [--platform] [-c|--confirm] [-v|--verbose]
+	             [--keep] [--platform] [-c|--confirm] [--insecure-registry]
+	             [--domain] [-v|--verbose]
 
 DESCRIPTION
 
@@ -28,7 +29,12 @@ DESCRIPTION
 	previously been configured for the function. This registry is also used to
 	determine the final built image tag for the function.  This final image name
 	can be provided explicitly using --image, in which case it is used in place
-	of --registry.
+	of --registry.o
+
+	The optional --domain indicates a specific domain should be used for the
+	route of the deployed function instead of that specified as the default by
+	the cluster.  The domain must be configured as available on the cluster or
+	this setting will have no effect.
 
 	To run deploy using an interactive mode, use the --confirm (-c) option.
 	This mode is useful for the first deployment in particular, since subsdequent
@@ -45,6 +51,9 @@ DESCRIPTION
 	  to disable pushing.  This could be used, for example, to trigger a redeploy
 	  of a service without needing to build, or even have the container available
 	  locally with 'func deploy --build=false --push==false'.
+
+		To push to an insecure registry, such as a local testing registry which
+		is not secured by TLS, use --insecure-registry.
 
 	Remote
 	  Building and pushing (deploying) is by default run on localhost.  This
@@ -107,12 +116,14 @@ func deploy
   -b, --builder string          Builder to use when creating the function's container. Currently supported builders are "pack", "s2i" and "oci". (default "pack")
       --builder-image string    Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)
   -c, --confirm                 Prompt to confirm options interactively ($FUNC_CONFIRM)
+      --domain string           Domain to use for the function's route (ignored if unrecognized) ($FUNC_DOMAIN)
   -e, --env stringArray         Environment variable to set in the form NAME=VALUE. You may provide this flag multiple times for setting multiple environment variables. To unset, specify the environment variable name followed by a "-" (e.g., NAME-).
   -t, --git-branch string       Git revision (branch) to be used when deploying via the Git repository ($FUNC_GIT_BRANCH)
   -d, --git-dir string          Directory in the Git repository containing the function (default is the root) ($FUNC_GIT_DIR))
   -g, --git-url string          Repository url containing the function to build ($FUNC_GIT_URL)
   -h, --help                    help for deploy
   -i, --image string            Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)
+      --insecure-registry       Enable use of an insecure (non-https) registry. Currently ignored during S2I and Pack builds. ($FUNC_INSECURE_REGISTRY)
       --keep                    If building, keep the final genereatd files used to create the image (kept in the .func/builds directory) ($FUNC_KEEP)
   -n, --namespace string        Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. ($FUNC_NAMESPACE)
   -p, --path string             Path to the function.  Default is current directory ($FUNC_PATH)

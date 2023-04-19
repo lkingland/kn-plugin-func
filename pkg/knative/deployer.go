@@ -384,7 +384,7 @@ func generateNewService(f fn.Function, decorator DeployDecorator) (*v1.Service, 
 
 // generateServiceLabels creates a final map of service labels based
 // on the function's defined labels plus the
-// application of any provided label decorator.
+// application of any provided label decorator, plus the domain hint label.
 func generateServiceLabels(f fn.Function, d DeployDecorator) (ll map[string]string, err error) {
 	ll, err = f.LabelsMap()
 	if err != nil {
@@ -393,6 +393,10 @@ func generateServiceLabels(f fn.Function, d DeployDecorator) (ll map[string]stri
 
 	if d != nil {
 		ll = d.UpdateLabels(f, ll)
+	}
+
+	if f.Domain != "" {
+		ll["func.domain"] = f.Domain
 	}
 
 	return

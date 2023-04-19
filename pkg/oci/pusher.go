@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/term"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/layout"
@@ -18,22 +19,31 @@ import (
 
 // Pusher of OCI multi-arch layout directories.
 type Pusher struct {
-	verbose bool
+	Insecure bool
+	Verbose  bool
+	Username string
+	Token    string
+
 	updates chan v1.Update
 	done    chan bool
 }
 
-func NewPusher(verbose bool) *Pusher {
+func NewPusher(insecure, verbose bool) *Pusher {
 	return &Pusher{
-		verbose: verbose,
-		updates: make(chan v1.Update, 10),
-		done:    make(chan bool, 1),
+		Insecure: insecure,
+		Verbose:  verbose,
+		updates:  make(chan v1.Update, 10),
+		done:     make(chan bool, 1),
 	}
 }
 
 func (p *Pusher) Push(ctx context.Context, f fn.Function) (digest string, err error) {
 	go p.handleUpdates(ctx)
 	defer func() { p.done <- true }()
+	buildDir, err := getLastBuildDir(f)
+	if err != nil {
+		return
+	}
 	// TODO: GitOps Tagging: tag :latest by default, :[branch] for pinned
 	// environments and :[user]-[branch] for development/testing feature branches.
 	// has been enabled, where branch is tag-encoded.
@@ -41,16 +51,11 @@ func (p *Pusher) Push(ctx context.Context, f fn.Function) (digest string, err er
 	if err != nil {
 		return
 	}
-	buildDir, err := getLastBuildDir(f)
-	if err != nil {
-		return
-	}
 	ii, err := layout.ImageIndexFromPath(filepath.Join(buildDir, "oci"))
 	if err != nil {
 		return
 	}
-	err = remote.WriteIndex(ref, ii, p.remoteOptions(ctx)...)
-	if err != nil {
+	if err = p.writeIndex(ctx, ref, ii); err != nil {
 		return
 	}
 	h, err := ii.Digest()
@@ -58,7 +63,7 @@ func (p *Pusher) Push(ctx context.Context, f fn.Function) (digest string, err er
 		return
 	}
 	digest = h.String()
-	if p.verbose {
+	if p.Verbose {
 		fmt.Printf("\ndigest: %s\n", h)
 	}
 	return
@@ -73,14 +78,35 @@ func getLastBuildDir(f fn.Function) (string, error) {
 	return dir, nil
 }
 
-func (p *Pusher) remoteOptions(ctx context.Context) []remote.Option {
-	return []remote.Option{
+func (p *Pusher) writeIndex(ctx context.Context, ref name.Reference, ii v1.ImageIndex) error {
+	// If we're set to insecure, just try as-is and return on failure
+	if p.Insecure {
+		return remote.WriteIndex(ref, ii,
+			remote.WithContext(ctx),
+			remote.WithProgress(p.updates))
+	}
+
+	// If we have a username and token set, use basic auth
+	// TODO: Test; this may not be necessary since `docker login` appears
+	// to store the creds in the keychain which is used below:
+	/*
+		if p.Username != "" && p.Token != "" {
+			fmt.Println("Writing using Basic Auth")
+			return remote.WriteIndex(ref, ii,
+				remote.WithContext(ctx),
+				// remote.WithProgress(p.updates),
+				remote.WithAuth(&authn.Basic{
+					Username: p.Username,
+					Password: p.Token,
+				}))
+		}
+	*/
+
+	// Otherwise use the keychain
+	return remote.WriteIndex(ref, ii,
 		remote.WithContext(ctx),
 		remote.WithProgress(p.updates),
-		// remote.WithTransport
-		// remote.WithAuth
-		// remote.WithAuthFromKeychain
-	}
+		remote.WithAuthFromKeychain(authn.DefaultKeychain))
 }
 
 func (p *Pusher) handleUpdates(ctx context.Context) {
@@ -99,11 +125,13 @@ func (p *Pusher) handleUpdates(ctx context.Context) {
 			bar.Set64(update.Complete)
 			continue
 		case <-p.done:
+			fmt.Println("received done signal, finishing bar")
 			if bar != nil {
 				_ = bar.Finish()
 			}
 			return
 		case <-ctx.Done():
+			fmt.Println("context done, finishing bar")
 			if bar != nil {
 				_ = bar.Finish()
 			}
