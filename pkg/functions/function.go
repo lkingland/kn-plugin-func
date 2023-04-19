@@ -716,16 +716,28 @@ func (f Function) writeBuildStamp() (err error) {
 
 // fingerprint returns a hash of the filenames and modification timestamps of
 // the files within a function's root.
-func (f Function) fingerprint() (string, error) {
+func (f Function) fingerprint() (hash string, err error) {
 	h := sha256.New()
-	err := filepath.Walk(f.Root, func(path string, info fs.FileInfo, err error) error {
+	// Create a build stamp log
+	log, err := os.Create(filepath.Join(RunDataDir, "built.log"))
+	if err != nil {
+		return
+	}
+
+	err = filepath.Walk(f.Root, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if path == f.Root {
+			return nil
 		}
 		// Always ignore .func, .git (TODO: .funcignore)
 		if info.IsDir() && (info.Name() == RunDataDir || info.Name() == ".git") {
 			return filepath.SkipDir
 		}
+		// Write to the Log
+		fmt.Fprintf(log, "%v:%v\n", path, info.ModTime().UnixNano())
+		// Write to the Hasher
 		fmt.Fprintf(h, "%v:%v:", path, info.ModTime().UnixNano())
 		return nil
 	})
