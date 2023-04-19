@@ -32,7 +32,7 @@ SYNOPSIS
 	{{rootCmdUse}} deploy [-R|--remote] [-r|--registry] [-i|--image] [-n|--namespace]
 	             [-e|env] [-g|--git-url] [-t|git-branch] [-d|--git-dir]
 	             [-b|--build] [--builder] [--builder-image] [-p|--push]
-	             [--platform] [-c|--confirm] [-v|--verbose]
+	             [--domain] [--platform] [-c|--confirm] [-v|--verbose]
 
 DESCRIPTION
 
@@ -76,6 +76,14 @@ DESCRIPTION
 	  of a git repository instead of local source, combine with '--git-url':
 	  '{{rootCmdUse}} deploy --remote --git-url=git.example.com/alice/f.git'
 
+	Domain
+	  When deploying, a function's route is automatically generated using the
+	  default domain with which the target platform has been configured.  The
+	  optional flag --domain can be used to choose this domain explicitly for
+	  clusters which have been configured with support for function domain
+	  selectors. Note that the domain specified must be one of those configured
+	  or the flag will be ignored.
+
 EXAMPLES
 
 	o Deploy the function
@@ -116,7 +124,7 @@ EXAMPLES
 
 `,
 		SuggestFor: []string{"delpoy", "deplyo"},
-		PreRunE:    bindEnv("confirm", "env", "git-url", "git-branch", "git-dir", "remote", "build", "builder", "builder-image", "image", "registry", "push", "platform", "namespace", "path", "verbose", "pvc-size"),
+		PreRunE:    bindEnv("build", "builder", "builder-image", "confirm", "domain", "env", "git-branch", "git-dir", "git-url", "image", "namespace", "path", "platform", "push", "pvc-size", "registry", "remote", "verbose"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeploy(cmd, newClient)
 		},
@@ -152,11 +160,15 @@ EXAMPLES
 	builderImage := f.Build.BuilderImages[f.Build.Builder]
 	cmd.Flags().String("builder-image", builderImage,
 		"Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)")
-	cmd.Flags().StringP("image", "i", f.Image, "Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)")
+	cmd.Flags().StringP("image", "i", f.Image,
+		"Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)")
 
-	cmd.Flags().StringArrayP("env", "e", []string{}, "Environment variable to set in the form NAME=VALUE. "+
-		"You may provide this flag multiple times for setting multiple environment variables. "+
-		"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
+	cmd.Flags().StringArrayP("env", "e", []string{},
+		"Environment variable to set in the form NAME=VALUE. "+
+			"You may provide this flag multiple times for setting multiple environment variables. "+
+			"To unset, specify the environment variable name followed by a \"-\" (e.g., NAME-).")
+	cmd.Flags().String("domain", f.Domain,
+		"Domain to use for the function's route.  Cluster must be configured with domain matching for the given domain (ignored if unrecognized) ($FUNC_DOMAIN)")
 	cmd.Flags().StringP("git-url", "g", f.Build.Git.URL,
 		"Repository url containing the function to build ($FUNC_GIT_URL)")
 	cmd.Flags().StringP("git-branch", "t", f.Build.Git.Revision,
@@ -351,6 +363,42 @@ type deployConfig struct {
 	// Env variables.  May include removals using a "-"
 	Env []string
 
+	// Domain to use for the function's route.  Default is to let the cluster
+	// apply its default.  If configured to use domain matching, the given domain
+	// will be used.  This configuration, in short, is to configure the
+	// cluster's config-domain map to match on the `func.domain` label and use
+	// its value as the domain... presuming it is one of those explicitly
+	// enumerated.  This allows a function to be deployed explicitly choosing
+	// a route from one of the domains in a cluster with multiple configured
+	// domains.  Example:
+	//   func create -l go hello && func deploy --domain domain2.org
+	//   -> Func created as hello.[namespace].domain2.org
+	// This can also be useful to configure a cluster to deploy functions at
+	// the domain root when requested, but only be cluster-local (unexposed) by
+	// default.  This is accomplished by configuring the cluster-domain map to
+	// have the domain "cluster.local" as the default (empty selector), and
+	// the domain map template to omit the namespace interstitial.
+	// Example:
+	//   func create -l go myclusterservice && func deploy
+	//   ->  func creates myclusterservice.cluster.local which is not exposed
+	//       publicly outside the cluster
+	//   func create -l go www && func deploy --domain example.com
+	//   -> func deploys www.example.com as a publicly exposed service.
+	// TODO: allow for a simplified syntax of simply using the function's name
+	// as its route, and automatically parse off the domain suffix and validate
+	// the prefix is a dns label (ideally even validating the domain suffix is
+	// currently available and configured on the cluster).
+	// Example:
+	// func create -l go www.example.com
+	// -> func creates service www, with label func.domain as example.com, which
+	//    is one which the cluster has configured to server, so it is deployed with
+	//    a publicly accessible route
+	// -> func create -l go myclusterservice.cluster.local
+	//    is equivalent to `func create -l go myclusterservice`
+	//  All func commands which operate on function name now instead can use
+	// the FWDN.  Example `func delete www.example.com`
+	Domain string
+
 	// Git branch for remote builds
 	GitBranch string
 
@@ -383,6 +431,7 @@ func newDeployConfig(cmd *cobra.Command) (c deployConfig) {
 		buildConfig: newBuildConfig(),
 		Build:       viper.GetString("build"),
 		Env:         viper.GetStringSlice("env"),
+		Domain:      viper.GetString("domain"),
 		GitBranch:   viper.GetString("git-branch"),
 		GitDir:      viper.GetString("git-dir"),
 		GitURL:      viper.GetString("git-url"),
@@ -415,6 +464,7 @@ func (c deployConfig) Configure(f fn.Function) (fn.Function, error) {
 	f = c.buildConfig.Configure(f) // also configures .buildConfig.Global
 
 	// Configure basic members
+	f.Domain = c.Domain
 	f.Build.Git.URL = c.GitURL
 	f.Build.Git.ContextDir = c.GitDir
 	f.Build.Git.Revision = c.GitBranch // TODO: should match; perhaps "refSpec"

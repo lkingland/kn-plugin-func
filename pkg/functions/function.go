@@ -47,6 +47,29 @@ type Function struct {
 	// Name of the function.
 	Name string `yaml:"name,omitempty" jsonschema:"pattern=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
 
+	// Domain of the function optionally specifies the domain to use as the
+	// route of the function. By default the cluster's default will be used.
+	// Note that the value defined here must be one which the cluster is
+	// configured to recognize, or this will have no effect and the cluster
+	// default will be applied.  This value shuld therefore ideally be
+	// validated by the client.
+	//
+	// Matching a valid domain name using a regular expression can be quite
+	// complex, as there are many rules for domain names. However, below uses
+	// a simplified regular expression that matches most common domain names:
+	//
+	//  1 can contain letters (a-z, A-Z), digits (0-9), and hyphens (-).
+	//  2 cannot start or end with a hyphen.
+	//  3 Domain name components can be up to 63 characters long.
+	//  4 The top-level domain (TLD) should have at least two letters and max six.
+	//
+	// This regular expression doesn't cover all possible domain names, as there
+	// are more complex rules regarding internationalized domain names (IDNs) and
+	// new top-level domains (TLDs). Additionally, it does not validate against
+	// the list of known TLDs. However, it should work for most common domains.
+	Domain string `yaml:"domain" jsonschema:"pattern=^(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}\.?|[a-zA
+-Z0-9\-]+\.([a-zA-Z]{2,}\.?))$"`
+
 	// Runtime is the language plus context.  nodejs|go|quarkus|rust etc.
 	Runtime string `yaml:"runtime,omitempty"`
 
