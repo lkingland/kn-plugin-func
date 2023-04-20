@@ -606,7 +606,6 @@ func (c *Client) Build(ctx context.Context, f Function) (Function, error) {
 	if err = c.builder.Build(ctx, f); err != nil {
 		return f, err
 	}
-
 	f, err = f.updateBuildStamp()
 	if err != nil {
 		return f, err
