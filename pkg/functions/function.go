@@ -1,6 +1,7 @@
 package functions
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -655,29 +656,57 @@ var (
 
 // ensureRuntimeDir creates a .func directory in the root of the given
 // function which is also registered as ignored in .gitignore
-// TODO: Mutate extant .gitignore file if it exists rather than failing
-// if present (see contentious files in function.go), such that a user
-// can `git init` a directory prior to `func init` in the same directory).
 func (f Function) ensureRuntimeDir() error {
+	// Ensure the runtime directory exists
 	if err := os.MkdirAll(filepath.Join(f.Root, RunDataDir), os.ModePerm); err != nil {
 		return err
 	}
 
-	_, err := os.Stat(".gitignore")
-	if err == nil {
-		return nil
-	}
-	if !os.IsNotExist(err) {
+	// Update .gitignore
+	//
+	// Ensure .func is added to .gitignore unless the user explicitly
+	// commented out the ignore line for some awful reason.
+	// Also creates the .gitignore in the function's root directory if it does
+	// not already exist (note that this may not be in the root of the repo
+	// if the function is at a subpath of a monorepo)
+	filePath := filepath.Join(f.Root, ".gitignore")
+	roFile, err := os.Open(filePath)
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-
-	gitignore := `
+	defer roFile.Close()
+	if !os.IsNotExist(err) { // if no error openeing it
+		s := bufio.NewScanner(roFile) // create a scanner
+		for s.Scan() {                // scan each line
+			if strings.HasPrefix(s.Text(), "# "+RunDataDir) { // if it was commented
+				return nil // user want's it
+			}
+			if strings.HasPrefix(s.Text(), "/"+RunDataDir) { // if it is there
+				return nil // we're done
+			}
+		}
+	}
+	// Either .gitignore does not exist or it does not have the ignore
+	// directive for .func yet.
+	roFile.Close()
+	rwFile, err := os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer rwFile.Close()
+	_, err = rwFile.WriteString(`
 # Functions use the .func directory for local runtime data which should
-# generally not be tracked in source control:
+# generally not be tracked in source control.
+# To instruct the system to track .func in source control, comment out the
+# following line (prefix it with '# ').
 /.func
-`
-	return os.WriteFile(filepath.Join(f.Root, ".gitignore"), []byte(gitignore), 0644)
-
+`)
+	// Flush to disk immediately since this may affect subsequent calculations
+	// of the build stamp
+	if err = rwFile.Sync(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: error when syncing .gitignore. %s", err)
+	}
+	return nil
 }
 
 // Tag the function in memory as having been built
@@ -686,7 +715,7 @@ func (f Function) ensureRuntimeDir() error {
 // is placed in a .func (non-source controlled) local metadata directory, which
 // is not stritly required to exist, so it is created if needed.
 func (f Function) updateBuildStamp() (Function, error) {
-	hash, err := f.fingerprint()
+	hash, err := f.fingerprint(false)
 	if err != nil {
 		return f, err
 	}
@@ -695,18 +724,26 @@ func (f Function) updateBuildStamp() (Function, error) {
 	return f, err
 }
 
+type ErrMissingRunDataDir struct {
+	f Function
+}
+
+func (e ErrMissingRunDataDir) Error() string {
+	return fmt.Sprintf("function at path %q does not contain its runtime data direcotry %q.  Has it been initialized?", e.f.Root, RunDataDir)
+}
+
 // Tag the function on disk as having been built
 // This is locally-scoped data, only indicating there presumably exists
 // a container image in the cache of the the configured builder, thus this info
 // is placed in a .func (non-source controlled) local metadata directory, which
 // is not stritly required to exist, so it is created if needed.
 func (f Function) writeBuildStamp() (err error) {
-	if err = f.ensureRuntimeDir(); err != nil {
-		return err
-	}
-	hash, err := f.fingerprint()
+	hash, err := f.fingerprint(false)
 	if err != nil {
 		return err
+	}
+	if _, err := os.Stat(filepath.Join(f.Root, RunDataDir)); os.IsNotExist(err) {
+		return ErrMissingRunDataDir{f}
 	}
 	if err = os.WriteFile(filepath.Join(f.Root, RunDataDir, buildstamp), []byte(hash), os.ModePerm); err != nil {
 		return err
@@ -716,13 +753,22 @@ func (f Function) writeBuildStamp() (err error) {
 
 // fingerprint returns a hash of the filenames and modification timestamps of
 // the files within a function's root.
-func (f Function) fingerprint() (hash string, err error) {
+func (f Function) fingerprint(timestampLogfile bool) (hash string, err error) {
+	if _, err := os.Stat(filepath.Join(f.Root, RunDataDir)); os.IsNotExist(err) {
+		return "", ErrMissingRunDataDir{f}
+	}
 	h := sha256.New()
 	// Create a build stamp log
-	log, err := os.Create(filepath.Join(RunDataDir, "built.log"))
+	logfile := "built.log"
+	if timestampLogfile {
+		logfile = timestamp(logfile)
+	}
+
+	log, err := os.Create(filepath.Join(f.Root, RunDataDir, logfile))
 	if err != nil {
 		return
 	}
+	defer log.Close()
 
 	err = filepath.Walk(f.Root, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -742,6 +788,14 @@ func (f Function) fingerprint() (hash string, err error) {
 		return nil
 	})
 	return fmt.Sprintf("%x", h.Sum(nil)), err
+}
+
+// timestamp returns the given string prefixed with a microsecond-precision
+// timestamp followed by a dot.
+// YYYYMMDDHHMMSS.$nanosecond.$s
+func timestamp(s string) string {
+	t := time.Now()
+	return fmt.Sprintf("%s.%09d.%s", t.Format("20060102150405"), t.Nanosecond(), s)
 }
 
 // buildStamp returns the current (last) build stamp for the function
@@ -789,7 +843,7 @@ func (f Function) Built() bool {
 	}
 
 	// Calculate the function's Filesystem hash and see if it has changed.
-	hash, err := f.fingerprint()
+	hash, err := f.fingerprint(false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error calculating function's fingerprint: %v\n", err)
 		return false
