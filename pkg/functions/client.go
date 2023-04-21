@@ -381,8 +381,7 @@ func (c *Client) Registry() string {
 func (c *Client) Runtimes() ([]string, error) {
 	runtimes := utils.NewSortedSet()
 
-	// Gather all runtimes from all repositories
-	// into a uniqueness map
+	// Gather all runtimes from all repositories into a uniqueness map
 	repositories, err := c.Repositories().All()
 	if err != nil {
 		return []string{}, err
@@ -606,6 +605,7 @@ func (c *Client) Build(ctx context.Context, f Function) (Function, error) {
 	if err = c.builder.Build(ctx, f); err != nil {
 		return f, err
 	}
+
 	f, err = f.updateBuildStamp()
 	if err != nil {
 		return f, err

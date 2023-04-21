@@ -143,6 +143,15 @@ type BuildSpec struct {
 	// Build Env variables to be set
 	BuildEnvs Envs `yaml:"buildEnvs,omitempty"`
 
+	// BuildCommand specifies a custom explicit command to use when building the
+	// function. Currently only supported by the Host builder.
+	//
+	// This might be useful when, for example, the function is written in
+	// Go and the function developer needs Libc compatibility, in which case
+	// the default command will need to be replaced with:
+	// go build -ldflags "-linkmode 'external' -extldflags '-static'"
+	BuildCommand string `yaml:"buildCommand,omitempty"`
+
 	// PVCSize specifies the size of persistent volume claim used to store function
 	// when using deployment and remote build process (only relevant when Remote is true).
 	PVCSize string `yaml:"pvcSize,omitempty"`
@@ -715,7 +724,7 @@ func (f Function) ensureRuntimeDir() error {
 // is placed in a .func (non-source controlled) local metadata directory, which
 // is not stritly required to exist, so it is created if needed.
 func (f Function) updateBuildStamp() (Function, error) {
-	hash, err := f.fingerprint(false)
+	hash, err := f.Fingerprint(false)
 	if err != nil {
 		return f, err
 	}
@@ -738,7 +747,7 @@ func (e ErrMissingRunDataDir) Error() string {
 // is placed in a .func (non-source controlled) local metadata directory, which
 // is not stritly required to exist, so it is created if needed.
 func (f Function) writeBuildStamp() (err error) {
-	hash, err := f.fingerprint(false)
+	hash, err := f.Fingerprint(false)
 	if err != nil {
 		return err
 	}
@@ -751,9 +760,9 @@ func (f Function) writeBuildStamp() (err error) {
 	return
 }
 
-// fingerprint returns a hash of the filenames and modification timestamps of
+// Fingerprint returns a hash of the filenames and modification timestamps of
 // the files within a function's root.
-func (f Function) fingerprint(timestampLogfile bool) (hash string, err error) {
+func (f Function) Fingerprint(timestampLogfile bool) (hash string, err error) {
 	if _, err := os.Stat(filepath.Join(f.Root, RunDataDir)); os.IsNotExist(err) {
 		return "", ErrMissingRunDataDir{f}
 	}
@@ -843,7 +852,7 @@ func (f Function) Built() bool {
 	}
 
 	// Calculate the function's Filesystem hash and see if it has changed.
-	hash, err := f.fingerprint(false)
+	hash, err := f.Fingerprint(false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error calculating function's fingerprint: %v\n", err)
 		return false

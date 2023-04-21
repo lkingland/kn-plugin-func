@@ -55,7 +55,7 @@ func build
 ### Options
 
 ```
-  -b, --builder string         Builder to use when creating the function's container. Currently supported builders are "pack" and "s2i". ($FUNC_BUILDER) (default "pack")
+  -b, --builder string         Builder to use when creating the function's container. Currently supported builders are "pack", "s2i" and "host". ($FUNC_BUILDER) (default "pack")
       --builder-image string   Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)
   -c, --confirm                Prompt to confirm options interactively ($FUNC_CONFIRM)
   -h, --help                   help for build
