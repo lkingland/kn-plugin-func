@@ -168,13 +168,11 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	}
 
 	// Client
-	var client *fn.Client
-	o, err := cfg.buildOptions(client)
+	oo, err := cfg.buildOptions()
 	if err != nil {
 		return
 	}
-
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Build and (optionally) push
@@ -258,11 +256,11 @@ func (c buildConfig) Configure(f fn.Function) fn.Function {
 // TODO: As a further optimization, it might be ideal to only build the
 // image necessary for the target cluster, since the end product of  a function
 // deployment is not the contiainer, but rather the running service.
-func (c buildConfig) buildOptions(client *fn.Client) ([]fn.Option, error) {
+func (c buildConfig) buildOptions() ([]fn.Option, error) {
 	o := []fn.Option{fn.WithRegistry(c.Registry)}
 	if c.Builder == builders.Host {
 		o = append(o,
-			fn.WithBuilder(oci.NewBuilder(builders.Host, client, c.Verbose)),
+			fn.WithBuilder(oci.NewBuilder(builders.Host, c.Verbose)),
 			fn.WithPusher(&oci.Pusher{Verbose: c.Verbose}))
 	} else if c.Builder == builders.Pack {
 		o = append(o,

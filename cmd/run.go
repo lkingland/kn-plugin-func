@@ -161,16 +161,14 @@ func runRun(cmd *cobra.Command, args []string, newClient ClientFactory) (err err
 	}
 
 	// Client
-	var client *fn.Client
-	o, err := cfg.buildOptions(client)
+	oo, err := cfg.buildOptions()
 	if err != nil {
 		return
 	}
 	if cfg.Container {
-		o = append(o, fn.WithRunner(docker.NewRunner(cfg.Verbose, os.Stdout, os.Stderr)))
+		oo = append(oo, fn.WithRunner(docker.NewRunner(cfg.Verbose, os.Stdout, os.Stderr)))
 	}
-
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Build

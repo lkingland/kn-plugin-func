@@ -245,12 +245,11 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 	printDeployMessages(cmd.OutOrStdout(), cfg)
 
 	// Client
-	var client *fn.Client
-	o, err := cfg.buildOptions(client)
+	oo, err := cfg.buildOptions()
 	if err != nil {
 		return
 	}
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Deploy

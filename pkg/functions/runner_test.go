@@ -28,8 +28,7 @@ func TestRunner(t *testing.T) {
 
 	ctx := context.Background()
 
-	var client *fn.Client
-	client = fn.New(fn.WithBuilder(oci.NewBuilder("", client, true)))
+	client := fn.New(fn.WithBuilder(oci.NewBuilder("", true)), fn.WithVerbose(true))
 	f, err := client.Init(fn.Function{Root: root, Runtime: "go", Registry: TestRegistry})
 	if f, err = client.Build(ctx, f); err != nil {
 		t.Fatal(err)
@@ -38,6 +37,11 @@ func TestRunner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		if err := job.Stop(); err != nil {
+			t.Fatalf("error on job stop: %v", err)
+		}
+	}()
 
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%s", job.Port))
 	if err != nil {
@@ -48,6 +52,6 @@ func TestRunner(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("RUN received: %s\n", bodyBytes)
+	t.Logf("RUN received: %s", bodyBytes)
 
 }

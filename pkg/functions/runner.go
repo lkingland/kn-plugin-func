@@ -2,6 +2,7 @@ package functions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -32,12 +33,13 @@ func newDefaultRunner(client *Client, out, err io.Writer) *defaultRunner {
 	}
 }
 
-func (r *defaultRunner) Run(ctx context.Context, f Function) (job *Job, err error) {
+func (r *defaultRunner) Run(x context.Context, f Function) (job *Job, err error) {
 	var (
-		port    = choosePort(defaultRunHost, defaultRunPort, defaultRunDialTimeout)
-		doneCh  = make(chan error, 10)
-		stopFn  = func() error { return nil } // Only needed for continerized runs
-		verbose = r.client.verbose
+		ctx, cancel = context.WithCancel(x)
+		port        = choosePort(defaultRunHost, defaultRunPort, defaultRunDialTimeout)
+		doneCh      = make(chan error, 10)
+		stopFn      = func() error { cancel(); return nil }
+		verbose     = r.client.verbose
 	)
 
 	// NewJob creates .func/runs/PORT,
@@ -93,11 +95,32 @@ func (r *defaultRunner) Run(ctx context.Context, f Function) (job *Job, err erro
 		doneCh <- cmd.Run()
 	}()
 
-	// TODO(lkingland): probably should just run these jobs synchronously and
+	// TODO: should have just run these jobs synchronously and
 	// allowed the caller to place the task in a separate goroutine should they
 	// want to background, using ctx.Done() to signal interrupt.
 	// This will require refactoring the docker.Runner as well, however, so
 	// sticking with the pattern for now.
+	started := make(chan error, 1)
+	go func() {
+		tries := 0
+		for {
+			tries++
+			time.Sleep(500 * time.Millisecond)
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%s", port), time.Second)
+			if err != nil {
+				if tries > 20 {
+					started <- errors.New("function did not start listening on " + port)
+					return
+				}
+				continue
+			}
+			conn.Close()
+			started <- nil
+			return
+		}
+	}()
+
+	err = <-started
 	return
 }
 

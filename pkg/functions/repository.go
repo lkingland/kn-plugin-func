@@ -1,7 +1,6 @@
 package functions
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/url"
@@ -154,6 +153,10 @@ func NewRepository(name, uri string) (r Repository, err error) {
 	}
 	r.Runtimes, err = repositoryRuntimes(fs, r.Name, repoConfig) // load templates grouped by runtime
 	return
+}
+
+func (r Repository) FS() filesystem.Filesystem {
+	return r.fs
 }
 
 // filesystemFromURI returns a filesystem from the data located at the
@@ -523,45 +526,6 @@ func (r *Repository) Write(dest string) (err error) {
 		fs = filesystem.NewBillyFilesystem(wt.Filesystem)
 	}
 	return filesystem.CopyFromFS(".", dest, fs)
-}
-
-// WriteScaffolding code to the given path.
-//
-// Scaffolding is a language-level operation which first detects the method
-// signature used by the function's source code and then writes the
-// appropriate scaffolding.
-//
-// NOTE: Scaffoding is not per-template, because a template is merely an
-// example starting point for a Function implementation and should have no
-// bearing on the shape that function can eventually take.  The language,
-// and optionally invocation hint (For cloudevents) are used for this.  For
-// example, there can be multiple templates which exemplify a given method
-// signature, and the implementation can be switched at any time by the author.
-// Language, by contrast, is fixed at time of initialization.
-func (r *Repository) WriteScaffolding(ctx context.Context, f Function, s Signature, dest string) error {
-	if r.fs == nil {
-		return errors.New("repository has no filesystem")
-	}
-
-	fs := r.fs // The FS to copy
-
-	// NOTE
-	// Unlike writing the full filesystem to disk, we should not need to create
-	// a local clone becase we do not need the .git directory.
-
-	// FIXME: scaffolding not required.  Return a typed error such that it can
-	// be ignored by the caller? Presently a request to write scaffolding for
-	// a function which has no scaffolding defined for the given runtime and
-	// method signature will result in a os.IsNotExist error, which will be
-	// confusing.
-	// if fs.Stat(..); os.IsNotExist(err)
-	//  return "There is no scaffolding available for ....."
-	scaffolding := filepath.Join(f.Runtime, "scaffolding", s.String())
-	if _, err := fs.Stat(scaffolding); err != nil {
-		return fmt.Errorf("no scaffolding found for '%v' signature '%v'. %v.  Note that this test requires the filesystem be regenerated (try make first).", f.Runtime, s, err)
-	}
-
-	return filesystem.CopyFromFS(filepath.Join(f.Runtime, "scaffolding", s.String()), dest, fs)
 }
 
 // URL attempts to read the remote git origin URL of the repository.  Best

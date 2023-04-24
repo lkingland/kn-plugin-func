@@ -13,6 +13,7 @@ import (
 
 	"knative.dev/func/pkg/builders"
 	fn "knative.dev/func/pkg/functions"
+	"knative.dev/func/pkg/scaffolding"
 )
 
 var path = filepath.Join
@@ -45,12 +46,11 @@ func (e BuildErr) Error() string {
 
 type Builder struct {
 	name    string
-	client  *fn.Client
 	verbose bool
 }
 
-func NewBuilder(name string, client *fn.Client, verbose bool) *Builder {
-	return &Builder{name, client, verbose}
+func NewBuilder(name string, verbose bool) *Builder {
+	return &Builder{name, verbose}
 }
 
 // Build an OCI-compliant Mult-arch (v1.ImageIndex) container on disk
@@ -62,33 +62,31 @@ func NewBuilder(name string, client *fn.Client, verbose bool) *Builder {
 //
 //	.func/builds/last
 func (b *Builder) Build(ctx context.Context, f fn.Function) (err error) {
-	cfg := &buildConfig{ctx, b.client, f, time.Now(), b.verbose, ""}
+	cfg := &buildConfig{ctx, f, time.Now(), b.verbose, ""}
 
 	if err = setup(cfg); err != nil { // create directories and links
 		return
 	}
 	defer teardown(cfg)
 
-	//TODO: Use clien't actual Scaffold when ready:
-	/*
-		if err = cfg.client.Scaffold(ctx, f, cfg.buildDir()); err != nil {
-			return
-		}
-	*/
-	// IN the meantime, use an airball mainfile
-	data := `
-package main
-
-import "fmt"
-
-func main () {
-  fmt.Println("Hello, world!")
-}
-`
-	if err = os.WriteFile(path(cfg.buildDir(), "main.go"), []byte(data), 0664); err != nil {
+	// Load the embedded repository
+	repo, err := fn.NewRepository("", "")
+	if err != nil {
 		return
 	}
 
+	// Write out the scaffolding
+	err = scaffolding.Write(
+		cfg.buildDir(),
+		f.Root,
+		f.Runtime,
+		f.Invoke,
+		repo.FS())
+	if err != nil {
+		return
+	}
+
+	// Create an OCI container from the scaffolded function
 	if err = containerize(cfg); err != nil {
 		return
 	}
@@ -105,7 +103,6 @@ func main () {
 // buildConfig contains various settings for a single build
 type buildConfig struct {
 	ctx     context.Context // build context
-	client  *fn.Client      // backreference to the client for Scaffolding
 	f       fn.Function     // Function being built
 	t       time.Time       // Timestamp for this build
 	verbose bool            // verbose logging

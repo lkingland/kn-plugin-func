@@ -1,4 +1,4 @@
-package functions
+package scaffolding
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ func TestSignature_Map(t *testing.T) {
 	expectedName := "static-http"
 	expectedSig := StaticHTTP
 
-	s := signature(instanced, invocation)
+	s := toSignature(instanced, invocation)
 	if s != expectedSig {
 		t.Fatal("signature flags incorrectly mapped")
 	}
@@ -29,8 +29,8 @@ func TestSignature_Map(t *testing.T) {
 	}
 
 	// ensure that the default for invocation is http
-	if signature(true, "") != InstancedHTTP {
-		t.Fatalf("expected %v, got %v", InstancedHTTP, signature(true, ""))
+	if toSignature(true, "") != InstancedHTTP {
+		t.Fatalf("expected %v, got %v", InstancedHTTP, toSignature(true, ""))
 	}
 }
 
@@ -47,11 +47,11 @@ func TestDetector_Go(t *testing.T) {
 	// scaffolding code needs to be written to get the user to a proper
 	// complile attempt.
 	tests := []struct {
-		Name string                  // Name of the test
-		Sig  Signature               // Signature Expected
-		Err  error                   // Error Expected
-		Src  string                  // Source code to check
-		Cfg  func(Function) Function // Configure the default function for the test.
+		Name string    // Name of the test
+		Sig  Signature // Signature Expected
+		Err  error     // Error Expected
+		Src  string    // Source code to check
+		Inv  string    // invocation hint; "http" (default) or "cloudevent"
 	}{
 		{
 			Name: "Instanced HTTP",
@@ -75,10 +75,7 @@ func Handle() { }
 			Name: "Instanced Cloudevent",
 			Sig:  InstancedCloudevent,
 			Err:  nil,
-			Cfg: func(f Function) Function {
-				f.Invoke = "cloudevent" // see NOTE above
-				return f
-			},
+			Inv:  "cloudevent",
 			Src: `
 package f
 func New() { }
@@ -87,10 +84,7 @@ func New() { }
 			Name: "Static Cloudevent",
 			Sig:  StaticCloudevent,
 			Err:  nil,
-			Cfg: func(f Function) Function {
-				f.Invoke = "cloudevent" // see NOTE above
-				return f
-			},
+			Inv:  "cloudevent",
 			Src: `
 package f
 func Handle() { }
@@ -135,21 +129,9 @@ func Handle() { }
 			root, cleanup := Mktemp(t)
 			defer cleanup()
 
-			f := Function{Runtime: "go", Root: root}
-			if test.Cfg != nil {
-				f = test.Cfg(f)
-			}
+			os.WriteFile(filepath.Join(root, "function.go"), []byte(test.Src), os.ModePerm)
 
-			f, err := New().Init(f)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			// NOTE: if/when the default filename changes from handle.go to
-			// function.go, this will also have to change
-			os.WriteFile(filepath.Join(root, "handle.go"), []byte(test.Src), os.ModePerm)
-
-			s, err := functionSignature(f)
+			s, err := signature(root, "go", test.Inv)
 			if err != nil && test.Err == nil {
 				t.Fatalf("unexpected error. %v", err)
 			}
