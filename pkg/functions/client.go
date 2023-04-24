@@ -124,6 +124,8 @@ type ProgressListener interface {
 	SetTotal(int)
 	// Increment to the next step with the given message.
 	Increment(message string)
+	// Update the text of the current step to be the given message.
+	Update(message string)
 	// Complete signals completion, which is expected to be somewhat different
 	// than a step increment.
 	Complete(message string)
@@ -1085,6 +1087,7 @@ type NoopProgressListener struct{}
 
 func (p *NoopProgressListener) SetTotal(i int)     {}
 func (p *NoopProgressListener) Increment(m string) {}
+func (p *NoopProgressListener) Update(m string)    {}
 func (p *NoopProgressListener) Complete(m string)  {}
 func (p *NoopProgressListener) Stopping()          {}
 func (p *NoopProgressListener) Done()              {}

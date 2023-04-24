@@ -129,6 +129,18 @@ func (b *Bar) Increment(text string) {
 	b.overwrite("   ") // Write with space for the spinner
 }
 
+// func (b *Bar) Update the text of the currently active step.
+// Useful for when the given step itself has progress.
+func (b *Bar) Update(text string) {
+	if !interactiveTerminal() {
+		if b.printWhileHeadless {
+			b.write()
+		}
+		return
+	}
+	b.overwrite("   " + text)
+}
+
 // Complete the spinner by advancing to the last step, printing the final text and stopping the write loop.
 func (b *Bar) Complete(text string) {
 	if !interactiveTerminal() && !b.printWhileHeadless {
