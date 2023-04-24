@@ -261,7 +261,7 @@ func (c buildConfig) buildOptions() ([]fn.Option, error) {
 	if c.Builder == builders.Host {
 		o = append(o,
 			fn.WithBuilder(oci.NewBuilder(builders.Host, c.Verbose)),
-			fn.WithPusher(&oci.Pusher{Verbose: c.Verbose}))
+			fn.WithPusher(oci.NewPusher(false, c.Verbose)))
 	} else if c.Builder == builders.Pack {
 		o = append(o,
 			fn.WithBuilder(pack.NewBuilder(

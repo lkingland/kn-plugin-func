@@ -51,6 +51,7 @@ func (p *Pusher) Push(ctx context.Context, f fn.Function) (digest string, err er
 	if err != nil {
 		return
 	}
+	// TODO: GitOps Tagging: tag :latest by default, :[branch] for pinned
 	ii, err := layout.ImageIndexFromPath(filepath.Join(buildDir, "oci"))
 	if err != nil {
 		return
@@ -65,6 +66,8 @@ func (p *Pusher) Push(ctx context.Context, f fn.Function) (digest string, err er
 	digest = h.String()
 	if p.Verbose {
 		fmt.Printf("\ndigest: %s\n", h)
+	} else {
+		fmt.Println()
 	}
 	return
 }
@@ -122,13 +125,11 @@ func (p *Pusher) handleUpdates(ctx context.Context) {
 			bar.Set64(update.Complete)
 			continue
 		case <-p.done:
-			fmt.Println("received done signal, finishing bar")
 			if bar != nil {
 				_ = bar.Finish()
 			}
 			return
 		case <-ctx.Done():
-			fmt.Println("context done, finishing bar")
 			if bar != nil {
 				_ = bar.Finish()
 			}
