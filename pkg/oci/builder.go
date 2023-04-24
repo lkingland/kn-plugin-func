@@ -40,7 +40,7 @@ type BuildErr struct {
 }
 
 func (e BuildErr) Error() string {
-	return fmt.Sprintf("error performing host build. %e", e.Err)
+	return fmt.Sprintf("error performing host build. %v", e.Err)
 }
 
 type Builder struct {
@@ -151,11 +151,8 @@ func (c *buildConfig) blobsDir() string {
 // is in progress.
 func setup(cfg *buildConfig) (err error) {
 	// error if already in progress
-	if _, err := os.Stat(cfg.buildDir()); !os.IsNotExist(err) {
-		return BuildErr{fmt.Errorf("build directory already exists for this version hash.  Is a build already in progress? %v", cfg.buildDir())}
-	}
-	if _, err := os.Stat(cfg.pidLink()); !os.IsNotExist(err) {
-		return BuildErr{fmt.Errorf("pid link already exists for this version hash.  Is a build already in progress? %v", cfg.pidLink())}
+	if isActive(cfg, cfg.buildDir()) {
+		return BuildErr{fmt.Errorf("Build directory already exists for this version hash and is associated with an active PID.  Is a build already in progress? %v", cfg.buildDir())}
 	}
 
 	// create build files directory
@@ -259,7 +256,7 @@ func isLinkTo(link, target string) bool {
 	return link == target
 }
 
-// isActive returns whether or the given directory path is for a build
+// isActive returns whether or not the given directory path is for a build
 // which is currently active or in progress.
 func isActive(cfg *buildConfig, dir string) bool {
 	dd, _ := os.ReadDir(cfg.pidsDir())
