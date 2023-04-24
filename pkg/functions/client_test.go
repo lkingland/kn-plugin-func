@@ -463,6 +463,10 @@ func TestClient_New_Delegation(t *testing.T) {
 
 // TestClient_Run ensures that the runner is invoked with the absolute path requested.
 // Implicitly checks that the stop fn returned also is respected.
+// TODO: this test can be replaced with an actual test of testing Run now that
+// running outside of a container is supported by Go programs which use the
+// "host" builder (are scaffolded).  See the unit test TestRunner_Default
+// for a first pass at what could probably be the replacement for this test
 func TestClient_Run(t *testing.T) {
 	// Create the root function directory
 	root := "testdata/example.com/testRun"

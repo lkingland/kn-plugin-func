@@ -151,7 +151,7 @@ type Describer interface {
 // there is a one to many relationship between a given route and processes.
 // By default the system creates the 'local' and 'remote' named instances
 // when a function is run (locally) and deployed, respectively.
-// See the .Instances(f) accessor for the map of named environments to these
+// See the .InstanceRefs(f) accessor for the map of named environments to these
 // function information structures.
 type Instance struct {
 	// Route is the primary route of a function instance.
@@ -193,7 +193,6 @@ func New(options ...Option) *Client {
 		builder:           &noopBuilder{output: os.Stdout},
 		pusher:            &noopPusher{output: os.Stdout},
 		deployer:          &noopDeployer{output: os.Stdout},
-		runner:            &noopRunner{output: os.Stdout},
 		remover:           &noopRemover{output: os.Stdout},
 		lister:            &noopLister{output: os.Stdout},
 		describer:         &noopDescriber{output: os.Stdout},
@@ -202,6 +201,7 @@ func New(options ...Option) *Client {
 		pipelinesProvider: &noopPipelinesProvider{},
 		transport:         http.DefaultTransport,
 	}
+	c.runner = newDefaultRunner(c, os.Stdout, os.Stderr)
 	for _, o := range options {
 		o(c)
 	}
@@ -557,11 +557,7 @@ func (c *Client) Init(cfg Function) (Function, error) {
 	}
 
 	// Write out the new function's Template files.
-	// Templates contain values which may result in the function being mutated
-	// (default builders, etc), so a new (potentially mutated) function is
-	// returned from Templates.Write
-	err = c.Templates().Write(&f)
-	if err != nil {
+	if err = c.Templates().Write(&f); err != nil {
 		return f, err
 	}
 
