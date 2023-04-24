@@ -43,7 +43,7 @@
 				},
 				"buildCommand": {
 					"type": "string",
-					"description": "BuildCOmmand specifies a custom explicit command to use when building the function\nusing the Host builder. Currently only supported by the Host builder.\n\nThis might be useful when, for example, the function is written in\nGo and the function developer needs Libc compatibility, in which case\nthe default command will need to be replaced with:\ngo build -ldflags \"-linkmode 'external' -extldflags '-static'\""
+					"description": "BuildCommand specifies a custom explicit command to use when building the\nfunction. Currently only supported by the Host builder.\n\nThis might be useful when, for example, the function is written in\nGo and the function developer needs Libc compatibility, in which case\nthe default command will need to be replaced with:\ngo build -ldflags \"-linkmode 'external' -extldflags '-static'\""
 				},
 				"pvcSize": {
 					"type": "string",

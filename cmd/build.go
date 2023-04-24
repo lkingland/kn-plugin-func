@@ -168,24 +168,10 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	}
 
 	// Client
-	// Concrete implementations (ex builder) vary based on final effective config
 	var client *fn.Client
-	o := []fn.Option{fn.WithRegistry(cfg.Registry)}
-	if f.Build.Builder == builders.Host {
-		o = append(o,
-			fn.WithBuilder(oci.NewBuilder(builders.Host, client, cfg.Verbose)),
-			fn.WithPusher(&oci.Pusher{Verbose: cfg.Verbose}))
-	} else if f.Build.Builder == builders.Pack {
-		o = append(o, fn.WithBuilder(pack.NewBuilder(
-			pack.WithName(builders.Pack),
-			pack.WithVerbose(cfg.Verbose))))
-	} else if f.Build.Builder == builders.S2I {
-		o = append(o, fn.WithBuilder(s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithPlatform(cfg.Platform),
-			s2i.WithVerbose(cfg.Verbose))))
-	} else {
-		return builders.ErrUnknownBuilder{Name: f.Build.Builder, Known: KnownBuilders()}
+	o, err := cfg.buildOptions(client)
+	if err != nil {
+		return
 	}
 
 	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
@@ -256,6 +242,43 @@ func (c buildConfig) Configure(f fn.Function) fn.Function {
 	f.Image = c.Image
 	// Path, Platform and Push are not part of a function's state.
 	return f
+}
+
+// getBuildOptions is a workaround for an unnecessarily complex constructor
+// for the builder and pushers.  This will be refactored away when the default
+// host-based builder and pusher is the default, and the Pack and Builder
+// constructors are simplified.
+//
+// TODO: Platform is currently only used by the S2I builder.  This should be
+// a multi-valued argument which passes through to the "host" builder (which
+// supports multi-arch/platform images), and throw an error if either trying
+// to specify a platform for buildpacks, or trying to specify more than one
+// for S2I.
+//
+// TODO: As a further optimization, it might be ideal to only build the
+// image necessary for the target cluster, since the end product of  a function
+// deployment is not the contiainer, but rather the running service.
+func (c buildConfig) buildOptions(client *fn.Client) ([]fn.Option, error) {
+	o := []fn.Option{fn.WithRegistry(c.Registry)}
+	if c.Builder == builders.Host {
+		o = append(o,
+			fn.WithBuilder(oci.NewBuilder(builders.Host, client, c.Verbose)),
+			fn.WithPusher(&oci.Pusher{Verbose: c.Verbose}))
+	} else if c.Builder == builders.Pack {
+		o = append(o,
+			fn.WithBuilder(pack.NewBuilder(
+				pack.WithName(builders.Pack),
+				pack.WithVerbose(c.Verbose))))
+	} else if c.Builder == builders.S2I {
+		o = append(o,
+			fn.WithBuilder(s2i.NewBuilder(
+				s2i.WithName(builders.S2I),
+				s2i.WithPlatform(c.Platform),
+				s2i.WithVerbose(c.Verbose))))
+	} else {
+		return o, builders.ErrUnknownBuilder{Name: c.Builder, Known: KnownBuilders()}
+	}
+	return o, nil
 }
 
 // Prompt the user with value of config members, allowing for interactive changes.
