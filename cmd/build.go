@@ -152,9 +152,10 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 
 	// TODO: this logic is duplicated with runDeploy.  Shouild be in buildConfig
 	// constructor.
-	// Checks if there is a difference between defined registry and its value used as a prefix in the image tag
-	// In case of a mismatch a new image tag is created and used for build
-	// Do not react if image tag has been changed outside configuration
+	// Checks if there is a difference between defined registry and its value
+	// used as a prefix in the image tag In case of a mismatch a new image tag is
+	// created and used for build Do not react if image tag has been changed
+	// outside configuration
 	if f.Registry != "" && !cmd.Flags().Changed("image") && strings.Index(f.Image, "/") > 0 && !strings.HasPrefix(f.Image, f.Registry) {
 		prfx := f.Registry
 		if prfx[len(prfx)-1:] != "/" {
@@ -171,7 +172,9 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 	var client *fn.Client
 	o := []fn.Option{fn.WithRegistry(cfg.Registry)}
 	if f.Build.Builder == builders.Host {
-		o = append(o, fn.WithBuilder(oci.NewBuilder(builders.Host, client, cfg.Verbose)))
+		o = append(o,
+			fn.WithBuilder(oci.NewBuilder(builders.Host, client, cfg.Verbose)),
+			fn.WithPusher(&oci.Pusher{Verbose: cfg.Verbose}))
 	} else if f.Build.Builder == builders.Pack {
 		o = append(o, fn.WithBuilder(pack.NewBuilder(
 			pack.WithName(builders.Pack),
@@ -191,9 +194,6 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 		return
 	}
 	if cfg.Push {
-		if f.Build.Builder == builders.Host && cfg.Push {
-			return errors.New("Container build on-disk, but the host builder does not yet support pushing.")
-		}
 		if f, err = client.Push(cmd.Context(), f); err != nil {
 			return
 		}
