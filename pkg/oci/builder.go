@@ -241,19 +241,22 @@ func processExists(pid string) bool {
 }
 
 func isLinkTo(link, target string) bool {
-	target, err := filepath.Abs(target)
-	if err != nil {
+	var err error
+	if link, err = filepath.EvalSymlinks(link); err != nil {
 		return false
 	}
-	linkTarget, err := filepath.EvalSymlinks(link)
-	if err != nil {
+	if link, err = filepath.Abs(link); err != nil {
 		return false
 	}
-	linkTarget, err = filepath.Abs(linkTarget)
-	if err != nil {
+
+	if target, err = filepath.EvalSymlinks(target); err != nil {
 		return false
 	}
-	return linkTarget == target
+	if target, err = filepath.Abs(target); err != nil {
+		return false
+	}
+
+	return link == target
 }
 
 // isActive returns whether or the given directory path is for a build

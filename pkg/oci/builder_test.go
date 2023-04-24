@@ -31,7 +31,7 @@ func TestBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	last := path(f.Root, fn.RunDataDir, "builds", "last")
+	last := path(f.Root, fn.RunDataDir, "builds", "last", "oci")
 
 	validateOCI(last, t)
 }
