@@ -13,12 +13,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"knative.dev/client-pkg/pkg/util"
 	"knative.dev/func/pkg/builders"
-	pack "knative.dev/func/pkg/builders/buildpacks"
-	"knative.dev/func/pkg/builders/s2i"
 	"knative.dev/func/pkg/config"
 	fn "knative.dev/func/pkg/functions"
 	"knative.dev/func/pkg/k8s"
-	"knative.dev/func/pkg/oci"
 )
 
 func NewDeployCmd(newClient ClientFactory) *cobra.Command {
@@ -252,29 +249,11 @@ func runDeploy(cmd *cobra.Command, newClient ClientFactory) (err error) {
 	// Informative non-error messages regarding the final deployment request
 	printDeployMessages(cmd.OutOrStdout(), cfg)
 
-	// Client
-	// Concrete implementations (ex builder) vary  based on final effective cfg.
-	var client *fn.Client
-	o := []fn.Option{fn.WithRegistry(cfg.Registry)}
-	if f.Build.Builder == builders.Host {
-		o = append(o,
-			fn.WithBuilder(oci.NewBuilder(builders.Host, client, cfg.Verbose)),
-			fn.WithPusher(oci.NewPusher(false, cfg.Verbose)))
-	} else if f.Build.Builder == builders.Pack {
-		o = append(o, fn.WithBuilder(pack.NewBuilder(
-			pack.WithName(builders.Pack),
-			pack.WithVerbose(cfg.Verbose),
-			pack.WithTimestamp(cfg.Timestamp))))
-	} else if f.Build.Builder == builders.S2I {
-		o = append(o, fn.WithBuilder(s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithPlatform(cfg.Platform),
-			s2i.WithVerbose(cfg.Verbose))))
-	} else {
-		return builders.ErrUnknownBuilder{Name: f.Build.Builder, Known: KnownBuilders()}
+	oo, err := cfg.options()
+	if err != nil {
+		return
 	}
-
-	client, done := newClient(ClientConfig{Namespace: f.Deploy.Namespace, Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Namespace: f.Deploy.Namespace, Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Deploy

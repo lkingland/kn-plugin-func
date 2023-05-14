@@ -174,26 +174,11 @@ func runBuild(cmd *cobra.Command, _ []string, newClient ClientFactory) (err erro
 
 	// Client
 	// Concrete implementations (ex builder) vary based on final effective config
-	o := []fn.Option{fn.WithRegistry(cfg.Registry)}
-	if f.Build.Builder == builders.Host {
-		o = append(o,
-			fn.WithBuilder(oci.NewBuilder(builders.Host, cfg.Verbose)),
-			fn.WithPusher(oci.NewPusher(false, cfg.Verbose)))
-	} else if f.Build.Builder == builders.Pack {
-		o = append(o, fn.WithBuilder(pack.NewBuilder(
-			pack.WithName(builders.Pack),
-			pack.WithTimestamp(cfg.WithTimestamp),
-			pack.WithVerbose(cfg.Verbose))))
-	} else if f.Build.Builder == builders.S2I {
-		o = append(o, fn.WithBuilder(s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithPlatform(cfg.Platform),
-			s2i.WithVerbose(cfg.Verbose))))
-	} else {
-		return builders.ErrUnknownBuilder{Name: f.Build.Builder, Known: KnownBuilders()}
+	oo, err := cfg.options()
+	if err != nil {
+		return
 	}
-
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Build and (optionally) push
@@ -353,4 +338,43 @@ func (c buildConfig) Validate() (err error) {
 	}
 
 	return
+}
+
+// options returns options suitable for instantiating a client based on the
+// current state of the build config object.
+// This will be unnecessary and refactored away when the host-based OCI
+// builder and pusher are the default implementations and the Pack and S2I
+// constructors simplified.
+//
+// TODO: Platform is currently only used by the S2I builder.  This should be
+// a multi-valued argument which passes through to the "host" builder (which
+// supports multi-arch/platform images), and throw an error if either trying
+// to specify a platform for buildpacks, or trying to specify more than one
+// for S2I.
+//
+// TODO: As a further optimization, it might be ideal to only build the
+// image necessary for the target cluster, since the end product of  a function
+// deployment is not the contiainer, but rather the running service.
+func (c buildConfig) options() ([]fn.Option, error) {
+	o := []fn.Option{fn.WithRegistry(c.Registry)}
+	if c.Builder == builders.Host {
+		o = append(o,
+			fn.WithBuilder(oci.NewBuilder(builders.Host, c.Verbose)),
+			fn.WithPusher(oci.NewPusher(false, c.Verbose)))
+	} else if c.Builder == builders.Pack {
+		o = append(o,
+			fn.WithBuilder(pack.NewBuilder(
+				pack.WithName(builders.Pack),
+				pack.WithTimestamp(c.WithTimestamp),
+				pack.WithVerbose(c.Verbose))))
+	} else if c.Builder == builders.S2I {
+		o = append(o,
+			fn.WithBuilder(s2i.NewBuilder(
+				s2i.WithName(builders.S2I),
+				s2i.WithPlatform(c.Platform),
+				s2i.WithVerbose(c.Verbose))))
+	} else {
+		return o, builders.ErrUnknownBuilder{Name: c.Builder, Known: KnownBuilders()}
+	}
+	return o, nil
 }

@@ -11,9 +11,6 @@ import (
 	"github.com/ory/viper"
 	"github.com/spf13/cobra"
 
-	"knative.dev/func/pkg/builders"
-	pack "knative.dev/func/pkg/builders/buildpacks"
-	"knative.dev/func/pkg/builders/s2i"
 	"knative.dev/func/pkg/config"
 	"knative.dev/func/pkg/docker"
 	fn "knative.dev/func/pkg/functions"
@@ -140,10 +137,10 @@ func runRun(cmd *cobra.Command, args []string, newClient ClientFactory) (err err
 	if cfg, err = newRunConfig(cmd).Prompt(); err != nil {
 		return
 	}
-	if err = cfg.Validate(cmd); err != nil {
+	if f, err = fn.NewFunction(cfg.Path); err != nil {
 		return
 	}
-	if f, err = fn.NewFunction(cfg.Path); err != nil {
+	if err = cfg.Validate(cmd, f); err != nil {
 		return
 	}
 	if !f.Initialized() {
@@ -168,25 +165,14 @@ func runRun(cmd *cobra.Command, args []string, newClient ClientFactory) (err err
 	}
 
 	// Client
-	//
-	// Builder and runner implementations are based on the value of f.Build.Builder, and
-	//
-	o := []fn.Option{}
-	if f.Build.Builder == builders.Pack {
-		o = append(o, fn.WithBuilder(pack.NewBuilder(
-			pack.WithName(builders.Pack),
-			pack.WithVerbose(cfg.Verbose))))
-	} else if f.Build.Builder == builders.S2I {
-		o = append(o, fn.WithBuilder(s2i.NewBuilder(
-			s2i.WithName(builders.S2I),
-			s2i.WithPlatform(cfg.Platform),
-			s2i.WithVerbose(cfg.Verbose))))
+	oo, err := cfg.options()
+	if err != nil {
+		return
 	}
 	if cfg.Container {
-		o = append(o, fn.WithRunner(docker.NewRunner(cfg.Verbose, os.Stdout, os.Stderr)))
+		oo = append(oo, fn.WithRunner(docker.NewRunner(cfg.Verbose, os.Stdout, os.Stderr)))
 	}
-
-	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, o...)
+	client, done := newClient(ClientConfig{Verbose: cfg.Verbose}, oo...)
 	defer done()
 
 	// Build
@@ -300,7 +286,7 @@ func (c runConfig) Prompt() (runConfig, error) {
 	return c, nil
 }
 
-func (c runConfig) Validate(cmd *cobra.Command) (err error) {
+func (c runConfig) Validate(cmd *cobra.Command, f fn.Function) (err error) {
 	// Bubble
 	if err = c.buildConfig.Validate(); err != nil {
 		return
@@ -314,13 +300,13 @@ func (c runConfig) Validate(cmd *cobra.Command) (err error) {
 	}
 
 	// There is currently no local host runner implemented, so specifying
-	// --container=false should always return an informative error to the user
-	// such that they do not receive the rather cryptic "no runner defined"
-	// error from a Client instance which was instantiated with no runner.
+	// --container=false should return an informative error for runtimes other
+	// than Go  that is more helpful than the cryptic, though correct, error
+	// from the Client that it was instantated without a runner.
 	// TODO: modify this check when the local host runner is available to
 	// only generate this error when --container==false && the --language is
 	// not yet implemented.
-	if !c.Container {
+	if !c.Container && f.Runtime != "go" {
 		return errors.New("the ability to run functions outside of a container via 'func run' is coming soon.")
 	}
 	return
