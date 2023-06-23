@@ -65,6 +65,16 @@ $(BIN): $(CODE)
 	# Building
 	env CGO_ENABLED=0 go build -ldflags $(LDFLAGS) ./cmd/$(BIN)
 
+.PHONY: tst tst-checksum
+tst: tst-checksum .tst_stamp
+.tst_stamp: .tst_checksum
+	# Testing
+	go test -race -cover -coverprofile=coverage.txt ./...
+	touch .tst_stamp
+tst-checksum:
+	@go run generate/checkstamp/main.go .tst_checksum ./...
+
+
 .PHONY: test
 test: .test_stamp ## Run tests
 .test_stamp: $(CODE)
@@ -95,6 +105,7 @@ clean: ## Remove generated files. Use 'make clean && make' for a fully "clean" b
 	rm -f .docs_stamp
 	rm -f .check_stamp
 	rm -f .test_stamp
+	rm -f .templates_stamp
 
 .PHONY: docs
 docs: .docs_stamp
@@ -108,9 +119,9 @@ docs: .docs_stamp
 #############
 
 .PHONY: templates
-templates: templates-force generate/zz_filesystem_generated.go ## Build the embedded templates
+templates: .templates_checkstamp generate/zz_filesystem_generated.go ## Build the embedded templates
 
-generate/zz_filesystem_generated.go: templates/certs/ca-certificates.crt
+generate/zz_filesystem_generated.go: .templates_stamp templates/certs/ca-certificates.crt
 	@rm -f templates/go/cloudevents/go.sum
 	@rm -f templates/go/http/go.sum
 	@rm -rf templates/node/cloudevents/node_modules
@@ -128,17 +139,14 @@ generate/zz_filesystem_generated.go: templates/certs/ca-certificates.crt
 	@rm -rf templates/springboot/cloudevents/target
 	@rm -rf templates/springboot/http/target
 	@rm -f templates/**/.DS_Store
-
 	# Generating embedded templates filesystem
 	go generate pkg/functions/templates_embedded.go
 
-# force the rebuild of the templates by removing the file.  Rather than
-# simply mark the target itself as .PHONY, this allows other tasks which
-# depend on the file's existence (such as schema regeneration) to execute
-# without always triggering a regen cascade.
-.PHONY: templates-force
-templates-force:
-	@rm -f generate/zz_filesystem_generated.go
+# templates_checkstamp creates or updates .templates_stamp with the hash of
+# the files in ./templates, allowing rebuild on file deletions.
+.PHONY: .templates_checkstamp
+.templates_checkstamp:
+	@go run generate/checkstamp/main.go .templates_stamp ./templates
 
 # Checks that the generated embedded filesystem has been modified.
 # In CI this is combined with a `make clean` to check that the templates

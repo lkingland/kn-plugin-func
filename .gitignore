@@ -31,5 +31,6 @@ BUILD.bazel
 OWNERS
 OWNERS_ALIASES
 
-# Make stamps
+# Make stamps and checksums
 .*_stamp
+.*_checksum
