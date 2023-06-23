@@ -30,3 +30,6 @@ __pycache__
 BUILD.bazel
 OWNERS
 OWNERS_ALIASES
+
+# Make stamps
+.*_stamp
