@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -117,6 +118,89 @@ func TestBuilder_Concurrency(t *testing.T) {
 	// Release the blocking Build A and wait until complete.
 	continueCh <- true
 	<-doneCh
+}
+
+// TestBuilder_StaticEnvs ensures that certain "static" environment variables
+// comprising Function metadata are added to the config.
+func TestBuilder_StaticEnvs(t *testing.T) {
+	root, done := Mktemp(t)
+	defer done()
+
+	client := fn.New()
+	f, err := client.Init(fn.Function{Root: root, Runtime: "go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	builder := NewBuilder("", true)
+
+	if err := builder.Build(context.Background(), f, TestPlatforms); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert
+	// Check if the OCI container defines at least one of the static
+	// variables on each of the constituent containers.
+	// ---
+	// Get the images list (manifest descripors) from the index
+	ociPath := path(f.Root, fn.RunDataDir, "builds", "last", "oci")
+	data, err := ioutil.ReadFile(filepath.Join(ociPath, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var index struct {
+		Manifests []struct {
+			Digest string `json:"digest"`
+		} `json:"manifests"`
+	}
+	if err := json.Unmarshal(data, &index); err != nil {
+		t.Fatal(err)
+	}
+	for _, manifestDesc := range index.Manifests {
+
+		// Dereference the manifest descriptor into the referenced image manifest
+		manifestHash := strings.TrimPrefix(manifestDesc.Digest, "sha256:")
+		data, err := ioutil.ReadFile(filepath.Join(ociPath, "blobs", "sha256", manifestHash))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest struct {
+			Config struct {
+				Digest string `json:"digest"`
+			} `json:"config"`
+		}
+		if err := json.Unmarshal(data, &manifest); err != nil {
+			t.Fatal(err)
+		}
+
+		// From the image manifest get the the image's config.json
+		configHash := strings.TrimPrefix(manifest.Config.Digest, "sha256:")
+		data, err = ioutil.ReadFile(filepath.Join(ociPath, "blobs", "sha256", configHash))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config struct {
+			Config struct {
+				Env []string `json:"Env"`
+			} `json:"config"`
+		}
+		if err := json.Unmarshal(data, &config); err != nil {
+			panic(err)
+		}
+
+		// Check if one of the static envs (FUNC_CREATED) is defined
+		defined := false
+		for _, env := range config.Config.Env {
+			if strings.HasPrefix(env, "FUNC_CREATED=") {
+				t.Logf("OK: %v", env)
+				defined = true
+				break
+			}
+		}
+		if !defined {
+			t.Fatalf("container did not set FUNC_CREATED on image config")
+		}
+	}
 }
 
 func isFirstBuild(cfg *buildConfig, current v1.Platform) bool {
