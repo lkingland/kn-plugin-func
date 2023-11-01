@@ -1888,3 +1888,144 @@ func TestClient_RunRediness(t *testing.T) {
 		t.Fatalf("err on job stop. %v", err)
 	}
 }
+
+// TestClient_BuildClean ensures that when building a Function the source
+// controlled state is not modified (git would show no unstaged changes).
+// For example, the image name generated when building should not be stored
+// in function metadata that is checked into source control (func.yaml).
+func TestClient_BuildClean(t *testing.T) {
+	root, rm := Mktemp(t) // Create a temp directory and CD into it
+	defer rm()            // Deferring some cleanup
+
+	client := fn.New() // Create a new completely default client
+
+	ctx := context.Background()
+
+	// Initialize a new Function
+	f := fn.Function{Root: root, Runtime: TestRuntime, Registry: TestRegistry}
+	if _, err := client.Init(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// NOTE:  IN practice, the user would create a git repository, check
+	// everything in (including func.yaml), and upon build, the git tree should
+	// not show any unstaged changes.
+	// As a simpler flow, the filesystem hash calculated by the client
+	// includes this logic, so we can use this as a proxy.
+	hashA, _, err := fn.Fingerprint(root) // logicly the same as the git flow
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Load the newly created function
+	if f, err = fn.NewFunction(root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build the Function
+	if f, err = client.Build(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write
+	if err := f.Write(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ensure that the state on disk has not changed
+	// read in func.yaml again and compare.
+	hashB, _, err := fn.Fingerprint(root) // logicly the same as the git flow
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hashA != hashB {
+		t.Fatalf("building resulted in a dirty function state.")
+	}
+}
+
+// TestClient_BuildPopulatesImage ensures that building a Function results in
+// the function's "last built image" value to be populated.
+func TestClient_BuildPopulatesImage(t *testing.T) {
+	root, rm := Mktemp(t)
+	defer rm()
+
+	client := fn.New()
+	ctx := context.Background()
+
+	f := fn.Function{Root: root, Runtime: TestRuntime, Registry: TestRegistry}
+	if _, err := client.Init(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Currently must reload
+	if f, err = fn.NewFunction(root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build the Function
+	if f, err = client.Build(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+
+	if f.Build.Image != "example.com/alice/001:latest" {
+		t.Fatalf("expected built image to retain its last built image (for pusing and deploying).  got %v")
+	}
+}
+
+// TestClient_DeployReceivesHashedImage ensures that when deploying a built
+// function, the Deployer receives an image name which includes the full SHA.
+func TestClient_DeployReceivesHashedImage(t *testing.T) {
+
+	// ASSEMBLE
+	// ------------
+	root, rm := Mktemp(t)
+	defer rm()
+
+	pusher := mock.NewPusher()
+
+	deployer := mock.NewDeployer()
+	deployer.DeployFn = func(_ context.Context, f fn.Function) (fn.DeploymentResult, error) {
+		if !strings.Contains(f.Build.Image, "SHA") {
+			t.Fatalf("deployer did not receive an image with sha.  got '%v'", f.Build.Image)
+		}
+		return fn.DeploymentResult{}, nil
+	}
+
+	// NOTE: this is using a mock pusher which emulates the broken flow of
+	// the pusher being the code which returns the image's SHA.  When that is
+	// fixed, this should be fn.WithBuilder, and the builder mock be the one
+	// who returns the image name with SHA rather than the pusher.
+	client := fn.New(fn.WithPusher(pusher), fn.WithDeployer())
+	ctx := context.Background()
+
+	f := fn.Function{Root: root, Runtime: TestRuntime, Registry: TestRegistry}
+	if _, err := client.Init(f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Currently must reload
+	if f, err = fn.NewFunction(root); err != nil {
+		t.Fatal(err)
+	}
+
+	// Build the Function
+	if f, err = client.Build(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+
+	// ACT
+	// =====
+
+	// Deploy it
+	if _, err = client.Deploy(ctx, f); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert the deployer received a hashed image.
+	if !deployer.DeployInvoked {
+		t.Fatal("deployer was never invoked")
+	}
+
+	// NOTE: Assertion is done in the mock deployers DeployFn implementation
+}

@@ -6,6 +6,8 @@ import (
 	fn "knative.dev/func/pkg/functions"
 )
 
+const TestDigest = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
 type Pusher struct {
 	PushInvoked bool
 	PushFn      func(fn.Function) (string, error)
@@ -13,7 +15,7 @@ type Pusher struct {
 
 func NewPusher() *Pusher {
 	return &Pusher{
-		PushFn: func(fn.Function) (string, error) { return "", nil },
+		PushFn: func(fn.Function) (string, error) { return TestDigest, nil },
 	}
 }
 
