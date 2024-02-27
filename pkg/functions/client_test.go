@@ -564,7 +564,7 @@ func TestClient_New_Delegation(t *testing.T) {
 		return nil
 	}
 
-	pusher.PushFn = func(f fn.Function) (string, error) {
+	pusher.PushFn = func(_ context.Context, f fn.Function) (string, error) {
 		if f.Image != expectedImage {
 			t.Fatalf("pusher expected image '%v', got '%v'", expectedImage, f.Image)
 		}
@@ -842,7 +842,7 @@ func TestClient_Update(t *testing.T) {
 	}
 
 	// Pusher whose implementaiton verifies the expected image
-	pusher.PushFn = func(f fn.Function) (string, error) {
+	pusher.PushFn = func(_ context.Context, f fn.Function) (string, error) {
 		if f.Image != expectedImage {
 			t.Fatalf("pusher expected image '%v', got '%v'", expectedImage, f.Image)
 		}
