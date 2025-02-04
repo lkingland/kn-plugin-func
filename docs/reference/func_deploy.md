@@ -115,7 +115,7 @@ func deploy
 ```
       --build string[="true"]    Build the function. [auto|true|false]. ($FUNC_BUILD) (default "auto")
       --build-timestamp          Use the actual time as the created time for the docker image. This is only useful for buildpacks builder.
-  -b, --builder string           Builder to use when creating the function's container. Currently supported builders are "pack" and "s2i". (default "pack")
+  -b, --builder string           Builder to use when creating the function's container. Currently supported builders are "host", "pack" and "s2i". (default "pack")
       --builder-image string     Specify a custom builder image for use by the builder other than its default. ($FUNC_BUILDER_IMAGE)
   -c, --confirm                  Prompt to confirm options interactively ($FUNC_CONFIRM)
       --domain string            Domain to use for the function's route.  Cluster must be configured with domain matching for the given domain (ignored if unrecognized) ($FUNC_DOMAIN)
@@ -125,7 +125,7 @@ func deploy
   -g, --git-url string           Repository url containing the function to build ($FUNC_GIT_URL)
   -h, --help                     help for deploy
   -i, --image string             Full image name in the form [registry]/[namespace]/[name]:[tag]@[digest]. This option takes precedence over --registry. Specifying digest is optional, but if it is given, 'build' and 'push' phases are disabled. ($FUNC_IMAGE)
-  -n, --namespace string         Deploy into a specific namespace. Will use function's current namespace by default if already deployed, and the currently active namespace if it can be determined. ($FUNC_NAMESPACE)
+  -n, --namespace string         Deploy into a specific namespace. Will use the function's current namespace by default if already deployed, and the currently active context if it can be determined. ($FUNC_NAMESPACE) (default "default")
   -p, --path string              Path to the function.  Default is current directory ($FUNC_PATH)
       --platform string          Optionally specify a specific platform to build for (e.g. linux/amd64). ($FUNC_PLATFORM)
   -u, --push                     Push the function image to registry before deploying. ($FUNC_PUSH) (default true)
